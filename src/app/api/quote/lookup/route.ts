@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabase/client"
 import { extractQuoteCode, normalizeQuoteCode } from "@/lib/quote/lookup"
+import {
+  buildMissingQuoteCodeMessageZh,
+  buildQuoteNotFoundMessageZh,
+  getQuoteAppOrigin,
+} from "@/lib/quote/public-url"
 
 export const runtime = "nodejs"
 
@@ -18,8 +23,14 @@ export async function POST(request: Request) {
     const quoteCode = fromQuoteCode ?? fromMessage
 
     if (!quoteCode) {
+      const recreateQuoteUrl = getQuoteAppOrigin()
       return NextResponse.json(
-        { error: "Missing quote code. Provide quoteCode or message containing Q-YYYYMMDD-XXX." },
+        {
+          error: "Missing quote code. Provide quoteCode or message containing Q-YYYYMMDD-XXX.",
+          found: false,
+          recreateQuoteUrl,
+          messageZh: buildMissingQuoteCodeMessageZh(),
+        },
         { status: 400 },
       )
     }
@@ -37,10 +48,13 @@ export async function POST(request: Request) {
     }
 
     if (!data) {
+      const recreateQuoteUrl = getQuoteAppOrigin()
       return NextResponse.json(
         {
           found: false,
           quoteCode,
+          recreateQuoteUrl,
+          messageZh: buildQuoteNotFoundMessageZh(quoteCode),
           error: `Quote not found: ${quoteCode}`,
         },
         { status: 404 },
