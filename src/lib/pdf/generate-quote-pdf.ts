@@ -69,7 +69,7 @@ function loadCJKFont(doc: jsPDF) {
 
   // Try loading font from filesystem (works in Node.js / Vercel serverless)
   const fontPaths = [
-    path.join(process.cwd(), "src/lib/line/fonts/NotoSansTC-Regular.ttf"),
+    path.join(process.cwd(), "src/lib/pdf/fonts/NotoSansTC-Regular.ttf"),
     path.join(__dirname, "fonts/NotoSansTC-Regular.ttf"),
   ]
 

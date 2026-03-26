@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabase/client"
 import { extractQuoteCode, normalizeQuoteCode } from "@/lib/quote/lookup"
+import { getQuoteAppOrigin } from "@/lib/quote/public-url"
 import {
   buildMissingQuoteCodeMessageZh,
   buildQuoteNotFoundMessageZh,
-  getQuoteAppOrigin,
-} from "@/lib/quote/public-url"
+} from "@/lib/line/messages"
 
 export const runtime = "nodejs"
 

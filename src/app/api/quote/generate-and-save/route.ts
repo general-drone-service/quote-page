@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
-import { generateQuotePdf } from "@/lib/line/generate-quote-pdf"
-import type { QuotePdfInput } from "@/lib/line/generate-quote-pdf"
+import { generateQuotePdf } from "@/lib/pdf"
+import type { QuotePdfInput } from "@/lib/pdf"
 import { getSupabaseAdmin } from "@/lib/supabase/client"
 
 export const runtime = "nodejs"
