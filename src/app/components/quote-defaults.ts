@@ -204,6 +204,10 @@ export interface AreaEstimate {
   facadeWidths_m?: number[]       // per-facade widths for one building (MBR)
   /** Per-building facade widths when buildings differ in size [buildingIdx][facadeIdx] */
   perBuildingFacadeWidths?: number[][]
+  /** Per-building surface area totals */
+  perBuildingTotals_m2?: number[]
+  /** Per-building perimeters in meters */
+  perBuildingPerimeters_m?: number[]
   /** Actual project total when buildings have different sizes; omit when all equal */
   project_total_m2?: number
 }
@@ -296,6 +300,8 @@ export function estimateFromMultiRects(
   const height = floors * FLOOR_HEIGHT_M
   const fallback = rects.find(r => r !== null) ?? null
   const perBuildingFacadeWidths: number[][] = []
+  const perBuildingTotals: number[] = []
+  const perBuildingPerims: number[] = []
   let totalProjectArea = 0
 
   for (let b = 0; b < numBuildings; b++) {
@@ -304,9 +310,14 @@ export function estimateFromMultiRects(
       const sides = [rect.w, rect.d, rect.w, rect.d]
       const facadeWidths = Array.from({ length: numFacades }, (_, i) => sides[i % 4])
       perBuildingFacadeWidths.push(facadeWidths)
-      totalProjectArea += facadeWidths.reduce((s, w) => s + w * height, 0)
+      const buildingArea = facadeWidths.reduce((s, w) => s + w * height, 0)
+      totalProjectArea += buildingArea
+      perBuildingTotals.push(Math.round(buildingArea))
+      perBuildingPerims.push(Math.round(2 * (rect.w + rect.d)))
     } else {
       perBuildingFacadeWidths.push([])
+      perBuildingTotals.push(0)
+      perBuildingPerims.push(0)
     }
   }
 
@@ -325,6 +336,8 @@ export function estimateFromMultiRects(
     total_area_m2: Math.round(avgBuildingArea),
     num_facades: numFacades,
     perBuildingFacadeWidths,
+    perBuildingTotals_m2: perBuildingTotals,
+    perBuildingPerimeters_m: perBuildingPerims,
     project_total_m2: Math.round(totalProjectArea),
   }
 }
@@ -526,6 +539,8 @@ export function estimateFromMultiPerimeters(
   const fallback = perimeters_m.find(p => p != null) ?? 80
   const perBuildingFacadeWidths: number[][] = []
   const resolvedPerBuildingNumFacades: number[] = []
+  const perBuildingTotals: number[] = []
+  const perBuildingPerims: number[] = []
   let totalProjectArea = 0
 
   for (let b = 0; b < numBuildings; b++) {
@@ -534,7 +549,10 @@ export function estimateFromMultiPerimeters(
     resolvedPerBuildingNumFacades.push(bFacades)
     const widths = Array.from({ length: bFacades }, () => Math.round(perim / bFacades))
     perBuildingFacadeWidths.push(widths)
-    totalProjectArea += perim * height
+    const buildingArea = perim * height
+    totalProjectArea += buildingArea
+    perBuildingTotals.push(Math.round(buildingArea))
+    perBuildingPerims.push(Math.round(perim))
   }
 
   const validPerims = perimeters_m.filter((p): p is number => p != null)
@@ -553,6 +571,8 @@ export function estimateFromMultiPerimeters(
     num_facades: numFacades,
     perBuildingNumFacades: resolvedPerBuildingNumFacades,
     perBuildingFacadeWidths,
+    perBuildingTotals_m2: perBuildingTotals,
+    perBuildingPerimeters_m: perBuildingPerims,
     project_total_m2: Math.round(totalProjectArea),
   }
 }
