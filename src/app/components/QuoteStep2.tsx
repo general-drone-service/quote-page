@@ -466,56 +466,59 @@ export function QuoteStep2({
                     </span>
                   </p>
                 )}
-                {areaEstimate.perBuildingPerimeters_m && areaEstimate.perBuildingPerimeters_m.length > 1 ? (
-                  <div className="text-xs text-blue-700 opacity-80 flex gap-3 flex-wrap">
-                    {areaEstimate.perBuildingPerimeters_m.map((p, i) => (
-                      <span key={i}>棟{BUILDING_LABELS[i] ?? i + 1} 周長 ≈ {p} m</span>
-                    ))}
-                  </div>
-                ) : drawnPolygons[0] ? (
-                  <p className="text-xs text-blue-700 opacity-80">
-                    多邊形周長 ≈ {Math.round(drawnPolygons[0].perimeter_m)} m
-                  </p>
-                ) : null}
-                {!areaEstimate.perBuildingFacadeWidths && areaEstimate.facadeWidths_m && areaEstimate.facadeWidths_m.length > 1 ? (
-                  <div className="flex gap-2 flex-wrap">
-                    {areaEstimate.facadeWidths_m.map((w, i) => (
-                      <span key={i} className="text-xs bg-blue-100 px-2 py-0.5 rounded">
-                        {i + 1}面：{w} m
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p>每面均寬 ≈ {areaEstimate.facade_width_m} m</p>
-                )}
-                <p>建物高度 = {floors}F × 3.5m = {areaEstimate.building_height_m}m</p>
                 {areaEstimate.perBuildingTotals_m2 && areaEstimate.perBuildingTotals_m2.length > 1 ? (
                   <>
-                    {areaEstimate.perBuildingTotals_m2.map((total, i) => (
-                      <p key={i} className="flex justify-between">
-                        <span>棟{BUILDING_LABELS[i] ?? i + 1} 表面積</span>
-                        <span>≈ {total.toLocaleString()} ㎡</span>
-                      </p>
-                    ))}
+                    <p>建物高度 = {floors}F × 3.5m = {areaEstimate.building_height_m}m</p>
+                    {areaEstimate.perBuildingTotals_m2.map((total, i) => {
+                      const drawn = !!drawnPolygons[i]
+                      return (
+                        <p key={i} className={`flex justify-between${drawn ? "" : " opacity-50"}`}>
+                          <span>
+                            棟{BUILDING_LABELS[i] ?? i + 1}　周長 {areaEstimate.perBuildingPerimeters_m?.[i] ?? "—"} m × 高 {areaEstimate.building_height_m}m
+                            {!drawn && <span className="text-xs ml-1">（未繪製）</span>}
+                          </span>
+                          <span>≈ {total.toLocaleString()} ㎡</span>
+                        </p>
+                      )
+                    })}
                     <p className="font-semibold text-base pt-1 border-t border-blue-200 mt-1">
                       各棟合計 ≈ {areaEstimate.project_total_m2!.toLocaleString()} ㎡
                     </p>
                   </>
                 ) : (
-                  <p className="font-semibold text-base pt-1">
-                    {areaEstimate.project_total_m2 != null ? (
-                      <>各棟合計 ≈ {areaEstimate.project_total_m2.toLocaleString()} ㎡</>
-                    ) : (
-                      <>
-                        單棟施作面積 ≈ {areaEstimate.total_area_m2.toLocaleString()} ㎡
-                        {numBuildings > 1 && (
-                          <span className="text-sm font-normal ml-1 opacity-80">
-                            × {numBuildings} 棟 = {(areaEstimate.total_area_m2 * numBuildings).toLocaleString()} ㎡
-                          </span>
-                        )}
-                      </>
+                  <>
+                    {drawnPolygons[0] && (
+                      <p className="text-xs text-blue-700 opacity-80">
+                        多邊形周長 ≈ {Math.round(drawnPolygons[0].perimeter_m)} m
+                      </p>
                     )}
-                  </p>
+                    {!areaEstimate.perBuildingFacadeWidths && areaEstimate.facadeWidths_m && areaEstimate.facadeWidths_m.length > 1 ? (
+                      <div className="flex gap-2 flex-wrap">
+                        {areaEstimate.facadeWidths_m.map((w, i) => (
+                          <span key={i} className="text-xs bg-blue-100 px-2 py-0.5 rounded">
+                            {i + 1}面：{w} m
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p>每面均寬 ≈ {areaEstimate.facade_width_m} m</p>
+                    )}
+                    <p>建物高度 = {floors}F × 3.5m = {areaEstimate.building_height_m}m</p>
+                    <p className="font-semibold text-base pt-1">
+                      {areaEstimate.project_total_m2 != null ? (
+                        <>各棟合計 ≈ {areaEstimate.project_total_m2.toLocaleString()} ㎡</>
+                      ) : (
+                        <>
+                          單棟施作面積 ≈ {areaEstimate.total_area_m2.toLocaleString()} ㎡
+                          {numBuildings > 1 && (
+                            <span className="text-sm font-normal ml-1 opacity-80">
+                              × {numBuildings} 棟 = {(areaEstimate.total_area_m2 * numBuildings).toLocaleString()} ㎡
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </p>
+                  </>
                 )}
               </div>
             </div>
