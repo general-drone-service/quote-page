@@ -2,10 +2,6 @@ import { NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabase/client"
 import { extractQuoteCode, normalizeQuoteCode } from "@/lib/quote/lookup"
 import { getQuoteAppOrigin } from "@/lib/quote/public-url"
-import {
-  buildMissingQuoteCodeMessageZh,
-  buildQuoteNotFoundMessageZh,
-} from "@/lib/line/messages"
 
 export const runtime = "nodejs"
 
@@ -29,7 +25,7 @@ export async function POST(request: Request) {
           error: "Missing quote code. Provide quoteCode or message containing Q-YYYYMMDD-XXX.",
           found: false,
           recreateQuoteUrl,
-          messageZh: buildMissingQuoteCodeMessageZh(),
+          messageZh: `請確認編號是否正確，或至 ${recreateQuoteUrl} 重新取得報價。`,
         },
         { status: 400 },
       )
@@ -38,7 +34,7 @@ export async function POST(request: Request) {
     const supabase = getSupabaseAdmin()
     const { data, error } = await supabase
       .from("quotes")
-      .select("quote_code,pdf_url,expires_at,created_at")
+      .select("quote_code,pdf_url,pricing,time_result,expires_at,created_at")
       .eq("quote_code", quoteCode)
       .maybeSingle()
 
@@ -54,17 +50,22 @@ export async function POST(request: Request) {
           found: false,
           quoteCode,
           recreateQuoteUrl,
-          messageZh: buildQuoteNotFoundMessageZh(quoteCode),
+          messageZh: `找不到報價單 ${quoteCode} 😕\n\n請確認編號是否正確，或至 ${recreateQuoteUrl} 重新取得報價。`,
           error: `Quote not found: ${quoteCode}`,
         },
         { status: 404 },
       )
     }
 
+    const pricing = data.pricing as { total?: number; valid_until?: string } | null
+    const timeResult = data.time_result as { suggested_days?: number } | null
+
     return NextResponse.json({
       found: true,
       quoteCode: data.quote_code,
       pdfUrl: data.pdf_url,
+      totalNtd: pricing?.total ?? null,
+      suggestedDays: timeResult?.suggested_days ?? null,
       expiresAt: data.expires_at,
       createdAt: data.created_at,
     })
