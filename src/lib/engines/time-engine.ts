@@ -6,11 +6,12 @@ import type {
 // ─── Baseline productivity (m²/hr) ───────────────────────────────────────────
 
 const BASELINE: Record<string, number> = {
-  "Cleaning-commercial": 600,
-  "Cleaning-luxury":     600,
-  "Cleaning-factory":    800,
-  "Cleaning-solar":      600,
-  "Inspection-any":      600,
+  "Cleaning-commercial": 300,
+  "Cleaning-luxury":     300,
+  "Cleaning-factory":    300,
+  "Cleaning-solar":      300,
+  "Cleaning-house":      300,
+  "Inspection-any":      300,
   "Coating-any":         150,
 }
 
@@ -18,7 +19,7 @@ function getBaseline(taskType: MissionType, buildingType: BuildingType): number 
   return (
     BASELINE[`${taskType}-${buildingType}`] ??
     BASELINE[`${taskType}-any`] ??
-    250
+    300
   )
 }
 
