@@ -1,24 +1,12 @@
 import { NextResponse } from "next/server"
-import { messagingApi } from "@line/bot-sdk"
-import { verifyLineSignature, replyQuotePdf, pushWelcomeMessage } from "@/lib/line/line-client"
+import { verifyLineSignature } from "@/lib/line/signature"
+import { replyQuotePdf, replyText, pushWelcomeMessage } from "@/lib/line/send"
+import { buildQuoteNotFoundMessageZh } from "@/lib/line/messages"
+import type { LineEvent, LineWebhookBody } from "@/lib/line/types"
 import { getSupabaseAdmin } from "@/lib/supabase/client"
 import { extractQuoteCode } from "@/lib/quote/lookup"
-import { buildQuoteNotFoundMessageZh } from "@/lib/quote/public-url"
 
 export const runtime = "nodejs"
-
-// ─── LINE Webhook Types ──────────────────────────────────────────────────────
-
-interface LineEvent {
-  type: string
-  replyToken?: string
-  source?: { type: string; userId?: string }
-  message?: { type: string; text?: string }
-}
-
-interface LineWebhookBody {
-  events: LineEvent[]
-}
 
 // ─── POST handler ────────────────────────────────────────────────────────────
 
@@ -85,23 +73,7 @@ async function handleTextMessage(replyToken: string, text: string) {
       .maybeSingle()
 
     if (error || !quote) {
-      const token = process.env.LINE_CHANNEL_ACCESS_TOKEN
-      if (!token) {
-        console.error("LINE webhook: missing LINE_CHANNEL_ACCESS_TOKEN for not-found reply")
-        return
-      }
-      const client = new messagingApi.MessagingApiClient({
-        channelAccessToken: token,
-      })
-      await client.replyMessage({
-        replyToken,
-        messages: [
-          {
-            type: "text",
-            text: buildQuoteNotFoundMessageZh(quoteCode),
-          },
-        ],
-      })
+      await replyText(replyToken, buildQuoteNotFoundMessageZh(quoteCode))
       return
     }
 
