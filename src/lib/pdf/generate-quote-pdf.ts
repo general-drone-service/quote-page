@@ -70,13 +70,17 @@ function loadCJKFont(doc: jsPDF) {
   // Try loading font from filesystem (works in Node.js / Vercel serverless)
   const fontPaths = [
     path.join(process.cwd(), "src/lib/pdf/fonts/NotoSansTC-Regular.ttf"),
+    path.join(process.cwd(), "src/lib/line/fonts/NotoSansTC-Regular.ttf"),
     path.join(__dirname, "fonts/NotoSansTC-Regular.ttf"),
+    path.join(__dirname, "../pdf/fonts/NotoSansTC-Regular.ttf"),
+    path.join(__dirname, "../../lib/pdf/fonts/NotoSansTC-Regular.ttf"),
   ]
 
   let fontBuffer: Buffer | null = null
   for (const p of fontPaths) {
     try {
       fontBuffer = fs.readFileSync(p)
+      console.log(`CJK font loaded from: ${p}`)
       break
     } catch {
       // Try next path
@@ -84,8 +88,7 @@ function loadCJKFont(doc: jsPDF) {
   }
 
   if (!fontBuffer) {
-    // Fallback: use default font (CJK will not render correctly)
-    console.warn("CJK font not found, PDF will use default font")
+    console.warn("CJK font not found, tried paths:", fontPaths)
     return
   }
 
