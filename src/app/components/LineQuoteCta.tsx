@@ -75,8 +75,9 @@ export function LineQuoteCta({ pricing, timeResult, formData, areaEstimate, buil
 
       const { quoteCode } = (await res.json()) as { quoteCode: string }
 
-      // Open LINE with pre-filled message
-      window.open(buildLineOaMessageUrl(`我要報價單 ${quoteCode}`), "_blank")
+      // Navigate to LINE deep link (window.location.href works reliably on
+      // mobile; window.open is blocked after async calls lose user-gesture context)
+      window.location.href = buildLineOaMessageUrl(`我要報價單 ${quoteCode}`)
 
       setLineSent(true)
     } catch (err) {
