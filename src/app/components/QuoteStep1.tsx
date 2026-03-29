@@ -59,10 +59,10 @@ export function QuoteStep1({
   const [geocoding, setGeocoding] = useState(false)
   const [geocodeError, setGeocodeError] = useState("")
   const [searchInput, setSearchInput] = useState(formData.address ?? "")
-  const [searchMode, setSearchMode] = useState<"address" | "name">("address")
   const [coordInput, setCoordInput] = useState("")
   const [coordError, setCoordError] = useState("")
   const [posUpdating, setPosUpdating] = useState(false)
+  const [locating, setLocating] = useState(false)
 
   // ── Re-fetch airspace + Overpass for any lat/lng ──────────────────────────
   const refetchForPosition = useCallback(async (lat: number, lng: number) => {
@@ -96,7 +96,7 @@ export function QuoteStep1({
     refetchForPosition(lat, lng)
   }, [updateForm, refetchForPosition])
 
-  // ── Address / name geocode ────────────────────────────────────────────────
+  // ── Address / name geocode (auto-detect mode on backend) ──────────────────
   const handleGeocode = useCallback(async () => {
     if (!searchInput.trim() || searchInput.trim().length < 2) return
     setGeocoding(true)
@@ -109,11 +109,11 @@ export function QuoteStep1({
 
     try {
       const geoRes = await fetch(
-        `/api/geocode?q=${encodeURIComponent(searchInput)}&mode=${searchMode}`
+        `/api/geocode?q=${encodeURIComponent(searchInput)}`
       )
       const geo = await geoRes.json()
       if (geo.status !== "success") {
-        setGeocodeError(geo.reason ?? "找不到此地址，請確認格式為「縣市＋區＋路名＋門牌號」")
+        setGeocodeError(geo.reason ?? "找不到此地址或建案名稱")
         setGeocoding(false)
         return
       }
@@ -126,7 +126,54 @@ export function QuoteStep1({
     } finally {
       setGeocoding(false)
     }
-  }, [searchInput, searchMode, updateForm, setBuildingName, refetchForPosition, setAirspace, setBuildingPerimeter, setBuildingPolygon, setBuildingDimensions])
+  }, [searchInput, updateForm, setBuildingName, refetchForPosition, setAirspace, setBuildingPerimeter, setBuildingPolygon, setBuildingDimensions])
+
+  // ── My location (GPS) ────────────────────────────────────────────────────
+  const handleMyLocation = useCallback(async () => {
+    if (!navigator.geolocation) {
+      setGeocodeError("您的瀏覽器不支援定位功能")
+      return
+    }
+    setLocating(true)
+    setGeocodeError("")
+    setAirspace(null)
+    setBuildingPerimeter(null)
+    setBuildingPolygon(null)
+    setBuildingDimensions(null)
+    setBuildingName(null)
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords
+        if (lat < 21 || lat > 26 || lng < 118 || lng > 123) {
+          setGeocodeError("目前位置不在台灣範圍內")
+          setLocating(false)
+          return
+        }
+        updateForm({ lat, lng, address: `${lat.toFixed(6)}, ${lng.toFixed(6)}` })
+        setSearchInput(`${lat.toFixed(6)}, ${lng.toFixed(6)}`)
+        await refetchForPosition(lat, lng)
+        setLocating(false)
+      },
+      (err) => {
+        setLocating(false)
+        switch (err.code) {
+          case err.PERMISSION_DENIED:
+            setGeocodeError("定位權限被拒絕，請在瀏覽器設定中允許存取位置")
+            break
+          case err.POSITION_UNAVAILABLE:
+            setGeocodeError("無法取得位置資訊")
+            break
+          case err.TIMEOUT:
+            setGeocodeError("定位逾時，請稍後再試")
+            break
+          default:
+            setGeocodeError("定位失敗，請稍後再試")
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    )
+  }, [updateForm, refetchForPosition, setAirspace, setBuildingPerimeter, setBuildingPolygon, setBuildingDimensions, setBuildingName])
 
   // ── Manual coordinate input ───────────────────────────────────────────────
   const handleCoordApply = useCallback(() => {
@@ -164,42 +211,38 @@ export function QuoteStep1({
         />
       </div>
 
-      {/* Search mode + input */}
+      {/* Search input — auto-detect address vs building name */}
       <div>
-        <div className="flex gap-1 mb-2">
-          {(["address", "name"] as const).map(mode => (
-            <button key={mode} type="button"
-              onClick={() => { setSearchMode(mode); setSearchInput("") }}
-              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                searchMode === mode ? "bg-blue-600 text-white" : "text-zinc-500 hover:text-zinc-800"
-              }`}>
-              {mode === "address" ? "地址搜尋" : "建案名稱"}
-            </button>
-          ))}
-        </div>
-
-        <label className="block text-sm font-medium text-zinc-700 mb-1">
-          {searchMode === "address" ? "建物地址" : "建案 / 建物名稱"}
-        </label>
+        <label className="block text-sm font-medium text-zinc-700 mb-1">地址或建案名稱</label>
         <div className="flex gap-2">
           <input
             type="text"
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
             onKeyDown={e => e.key === "Enter" && handleGeocode()}
-            placeholder={
-              searchMode === "address"
-                ? "例：台北市信義區松仁路100號"
-                : "例：台北101、信義之星、遠雄二代宅"
-            }
+            placeholder="例：台北市信義區松仁路100號、台北101"
             className="flex-1 px-3 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
           />
           <button onClick={handleGeocode}
-            disabled={geocoding || searchInput.trim().length < 2}
+            disabled={geocoding || locating || searchInput.trim().length < 2}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-zinc-300 transition-colors whitespace-nowrap">
-            {geocoding ? "定位中..." : "定位"}
+            {geocoding ? "定位中..." : "搜尋"}
           </button>
         </div>
+
+        {/* My location button */}
+        <button
+          type="button"
+          onClick={handleMyLocation}
+          disabled={locating || geocoding}
+          className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 disabled:text-zinc-400 disabled:border-zinc-200 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+            <path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-1.5 0a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0ZM10 11.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" clipRule="evenodd" />
+          </svg>
+          {locating ? "定位中..." : "使用我的位置"}
+        </button>
+
         {geocodeError && <p className="text-red-500 text-sm mt-1">{geocodeError}</p>}
 
         {/* Position confirmed */}

@@ -256,45 +256,59 @@ function addressVariants(q: string): string[] {
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
+// ─── Auto-detect: looks like an address if it contains 路/街/巷/弄/號/段 ────────
+
+function looksLikeAddress(q: string): boolean {
+  return /[路街巷弄號段]/.test(q)
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const q = searchParams.get("q")?.trim()
-  const mode = (searchParams.get("mode") ?? "address") as "address" | "name"
+  // mode param is now optional — auto-detect if not provided
+  const modeParam = searchParams.get("mode") as "address" | "name" | null
 
   if (!q || q.length < 2) {
     return NextResponse.json({ status: "failed", reason: "query too short" }, { status: 400 })
   }
 
-  const variants = mode === "name" ? [q] : addressVariants(q)
+  // Auto-detect: if input contains address keywords → address first, then name
+  // Otherwise → name first, then address
+  const isAddr = looksLikeAddress(q)
+  const modes: ("address" | "name")[] = modeParam
+    ? [modeParam]
+    : isAddr ? ["address", "name"] : ["name", "address"]
 
-  // 1. NLSC (most accurate for Taiwan; may timeout outside TW network)
-  for (const variant of variants) {
-    try {
-      const result = await tryNLSC(variant)
-      if (result) return NextResponse.json({ ...result, raw: q, status: "success" })
-    } catch { /* timeout or unreachable — fall through */ }
-  }
+  for (const mode of modes) {
+    const variants = mode === "name" ? [q] : addressVariants(q)
 
-  // 2. Photon (alternative OSM geocoder, different ranking than Nominatim)
-  for (const variant of variants) {
-    try {
-      const result = await tryPhoton(variant)
-      if (result) return NextResponse.json({ ...result, raw: q, status: "success" })
-    } catch { /* fall through */ }
-  }
+    // 1. NLSC (most accurate for Taiwan; may timeout outside TW network)
+    for (const variant of variants) {
+      try {
+        const result = await tryNLSC(variant)
+        if (result) return NextResponse.json({ ...result, raw: q, status: "success" })
+      } catch { /* timeout or unreachable — fall through */ }
+    }
 
-  // 3. Nominatim
-  for (const variant of variants) {
-    try {
-      const result = await tryNominatim(variant, mode)
-      if (result) return NextResponse.json({ ...result, raw: q, status: "success" })
-    } catch { /* fall through */ }
+    // 2. Photon (alternative OSM geocoder, different ranking than Nominatim)
+    for (const variant of variants) {
+      try {
+        const result = await tryPhoton(variant)
+        if (result) return NextResponse.json({ ...result, raw: q, status: "success" })
+      } catch { /* fall through */ }
+    }
+
+    // 3. Nominatim
+    for (const variant of variants) {
+      try {
+        const result = await tryNominatim(variant, mode)
+        if (result) return NextResponse.json({ ...result, raw: q, status: "success" })
+      } catch { /* fall through */ }
+    }
   }
 
   return NextResponse.json({
     status: "failed",
-    reason: mode === "name"
-      ? "找不到此建案名稱，請改用完整地址搜尋"
-      : "找不到此地址，請確認格式為「縣市＋區＋路名＋門牌號」（例：台北市信義區松仁路100號）",
+    reason: "找不到此地址或建案名稱，請嘗試輸入完整地址（例：台北市信義區松仁路100號）或知名建物名稱",
   })
 }
