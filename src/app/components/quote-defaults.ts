@@ -81,11 +81,11 @@ export const BUILDING_TYPE_OPTIONS: { value: BuildingType; label: string }[] = [
 
 export const DIRT_TYPE_OPTIONS: { value: DirtType; label: string; emoji: string; surcharge: number }[] = [
   { value: "dust",    label: "灰塵",      emoji: "💨", surcharge: 0  },
-  { value: "scale",   label: "水垢",      emoji: "🟤", surcharge: 7  },
-  { value: "mold",    label: "黑黴",      emoji: "🟢", surcharge: 5  },
-  { value: "bird",    label: "鳥屎",      emoji: "🐦", surcharge: 4  },
-  { value: "exhaust", label: "排煙汙垢",  emoji: "🏭", surcharge: 6  },
-  { value: "grease",  label: "機械油汙",  emoji: "⚫", surcharge: 12 },
+  { value: "scale",   label: "水垢",      emoji: "🟤", surcharge: 3.5 },
+  { value: "mold",    label: "黑黴",      emoji: "🟢", surcharge: 2.5 },
+  { value: "bird",    label: "鳥屎",      emoji: "🐦", surcharge: 2  },
+  { value: "exhaust", label: "排煙汙垢",  emoji: "🏭", surcharge: 3  },
+  { value: "grease",  label: "機械油汙",  emoji: "⚫", surcharge: 6  },
 ]
 
 export const CLEANING_AGENT_OPTIONS: { value: CleaningAgent; label: string }[] = [
