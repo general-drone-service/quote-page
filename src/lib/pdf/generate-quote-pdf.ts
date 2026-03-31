@@ -32,7 +32,7 @@ export interface QuotePdfInput {
 
 const BUILDING_LABELS: Record<string, string> = {
   commercial: "商辦大樓",
-  luxury: "豪宅大樓",
+  luxury: "住宅社區",
   house: "透天厝",
   factory: "廠房",
   solar: "太陽能板",
