@@ -73,7 +73,7 @@ export const SERVICE_OPTIONS: { value: ServiceType; label: string }[] = [
 
 export const BUILDING_TYPE_OPTIONS: { value: BuildingType; label: string }[] = [
   { value: "commercial", label: "商辦大樓" },
-  { value: "luxury", label: "豪宅大樓" },
+  { value: "luxury", label: "住宅社區" },
   { value: "house", label: "透天厝" },
   { value: "factory", label: "廠房" },
   { value: "solar", label: "太陽能板" },
