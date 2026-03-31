@@ -62,8 +62,8 @@ export interface PricingParams {
 
 export const PRICING_PARAMS_DEFAULT: PricingParams = {
   base_price: {
-    commercial: 28,
-    luxury: 31,
+    commercial: 14,
+    luxury: 15,
     house: 200,
     factory: 26,
     solar: 9.5,
@@ -77,13 +77,13 @@ export const PRICING_PARAMS_DEFAULT: PricingParams = {
 
   contamination_surcharge: {
     dust: 0,
-    scale: 7,
-    bird: 4,
-    mold: 5,
-    exhaust: 6,
-    grease: 12,
+    scale: 3.5,
+    bird: 2,
+    mold: 2.5,
+    exhaust: 3,
+    grease: 6,
   },
-  contamination_cap: 15,
+  contamination_cap: 7.5,
 
   cleaning_agent_surcharge: {
     soft: -1,
@@ -92,24 +92,24 @@ export const PRICING_PARAMS_DEFAULT: PricingParams = {
   },
 
   facade_surcharges: {
-    road_closure: 4,
-    tight_perimeter: 6,
-    high_risk_env: 7,
-    adjacent_trees: 5,
-    tree_extra: 10,
+    road_closure: 2,
+    tight_perimeter: 3,
+    high_risk_env: 3.5,
+    adjacent_trees: 2.5,
+    tree_extra: 5,
   },
 
   supply_surcharges: {
-    water_self: 7,
-    power_self: 7,
-    rooftop_not_good: 12,
+    water_self: 3.5,
+    power_self: 3.5,
+    rooftop_not_good: 6,
   },
 
   floor_multiplier: [
     { max_floor: 10,  multiplier: 1.0 },
-    { max_floor: 20,  multiplier: 1.1 },
-    { max_floor: 30,  multiplier: 1.3 },
-    { max_floor: 9999, multiplier: 1.5 },
+    { max_floor: 20,  multiplier: 1.05 },
+    { max_floor: 30,  multiplier: 1.12 },
+    { max_floor: 9999, multiplier: 1.25 },
   ],
 
   time_window_multiplier: {
@@ -120,7 +120,7 @@ export const PRICING_PARAMS_DEFAULT: PricingParams = {
 
   urgent_multiplier: 1.33,
 
-  min_order: 15000,
+  min_order: 30000,
 
   quote_max_multiplier: 2.5,
 
