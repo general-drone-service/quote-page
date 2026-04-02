@@ -13,6 +13,8 @@ export interface QuotePdfInput {
     address: string
     buildingType: string
     floors: number
+    heightMode?: "floors" | "height"
+    heightM?: number
     numBuildings?: number
     serviceType: string
     timeSlot: string
@@ -59,44 +61,42 @@ const MULT_KEY_LABELS: Record<string, string> = {
 
 // ─── Font loading ────────────────────────────────────────────────────────────
 
-let fontLoaded = false
+// Cache font data across invocations, but always register with each new jsPDF doc
+let cachedFontBase64: string | null = null
 
 function loadCJKFont(doc: jsPDF) {
-  if (fontLoaded) {
-    doc.setFont("NotoSansTC")
-    return
-  }
+  if (!cachedFontBase64) {
+    const fontPaths = [
+      path.join(process.cwd(), "src/lib/pdf/fonts/NotoSansTC-Regular.ttf"),
+      path.join(process.cwd(), "src/lib/line/fonts/NotoSansTC-Regular.ttf"),
+      path.join(__dirname, "fonts/NotoSansTC-Regular.ttf"),
+      path.join(__dirname, "../pdf/fonts/NotoSansTC-Regular.ttf"),
+      path.join(__dirname, "../../lib/pdf/fonts/NotoSansTC-Regular.ttf"),
+    ]
 
-  // Try loading font from filesystem (works in Node.js / Vercel serverless)
-  const fontPaths = [
-    path.join(process.cwd(), "src/lib/pdf/fonts/NotoSansTC-Regular.ttf"),
-    path.join(process.cwd(), "src/lib/line/fonts/NotoSansTC-Regular.ttf"),
-    path.join(__dirname, "fonts/NotoSansTC-Regular.ttf"),
-    path.join(__dirname, "../pdf/fonts/NotoSansTC-Regular.ttf"),
-    path.join(__dirname, "../../lib/pdf/fonts/NotoSansTC-Regular.ttf"),
-  ]
-
-  let fontBuffer: Buffer | null = null
-  for (const p of fontPaths) {
-    try {
-      fontBuffer = fs.readFileSync(p)
-      console.log(`CJK font loaded from: ${p}`)
-      break
-    } catch {
-      // Try next path
+    let fontBuffer: Buffer | null = null
+    for (const p of fontPaths) {
+      try {
+        fontBuffer = fs.readFileSync(p)
+        console.log(`CJK font loaded from: ${p}`)
+        break
+      } catch {
+        // Try next path
+      }
     }
+
+    if (!fontBuffer) {
+      console.warn("CJK font not found, tried paths:", fontPaths)
+      return
+    }
+
+    cachedFontBase64 = fontBuffer.toString("base64")
   }
 
-  if (!fontBuffer) {
-    console.warn("CJK font not found, tried paths:", fontPaths)
-    return
-  }
-
-  const fontBase64 = fontBuffer.toString("base64")
-  doc.addFileToVFS("NotoSansTC-Regular.ttf", fontBase64)
+  // Always register font with each new jsPDF instance
+  doc.addFileToVFS("NotoSansTC-Regular.ttf", cachedFontBase64)
   doc.addFont("NotoSansTC-Regular.ttf", "NotoSansTC", "normal")
   doc.setFont("NotoSansTC")
-  fontLoaded = true
 }
 
 // ─── PDF Generator ───────────────────────────────────────────────────────────
@@ -175,7 +175,9 @@ export function generateQuotePdf(input: QuotePdfInput): Buffer {
   if (buildingName) infoRows.push(["建物名稱", buildingName])
   infoRows.push([
     "建物",
-    `${BUILDING_LABELS[formData.buildingType] ?? formData.buildingType} ${formData.floors}F（${(formData.floors * 3.5).toFixed(1)}m）`,
+    formData.heightMode === "height" && formData.heightM
+      ? `${BUILDING_LABELS[formData.buildingType] ?? formData.buildingType} ${formData.heightM}m（≈ ${Math.round(formData.heightM / 3.5)}F）`
+      : `${BUILDING_LABELS[formData.buildingType] ?? formData.buildingType} ${formData.floors}F（${(formData.floors * 3.5).toFixed(1)}m）`,
   ])
   if (numBuildings > 1) infoRows.push(["棟數", `${numBuildings} 棟`])
   infoRows.push(

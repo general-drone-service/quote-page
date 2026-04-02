@@ -14,6 +14,7 @@ const INITIAL_FORM: Partial<QuoteFormData> = {
   serviceType: "cleaning",
   buildingType: "commercial",
   floors: 10,
+  heightMode: "floors",
   numBuildings: 1,
   numFacades: 4,
   timeSlot: "day",

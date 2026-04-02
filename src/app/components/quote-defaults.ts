@@ -151,6 +151,8 @@ export interface QuoteFormData {
   urgent: boolean
   buildingType: BuildingType
   floors: number
+  heightMode: "floors" | "height"  // input mode: floor count or direct height
+  heightM?: number                 // direct height in meters (when heightMode === "height")
   numBuildings: number          // how many buildings on the same project site
   numFacades: number            // facades per building (default / single-building)
   numFacadesPerBuilding?: number[]  // per-building face counts (from polygon vertices)
@@ -218,10 +220,11 @@ export function estimateFromPerimeter(
   perimeter_m: number,
   floors: number,
   numFacades: number,
-  source: AreaSource = "overpass"
+  source: AreaSource = "overpass",
+  heightOverride_m?: number,
 ): AreaEstimate {
   const facadeWidth = Math.round(perimeter_m / numFacades)
-  const height = floors * FLOOR_HEIGHT_M
+  const height = heightOverride_m ?? floors * FLOOR_HEIGHT_M
   const facadeArea = Math.round(facadeWidth * height)
   return {
     source,
@@ -239,8 +242,9 @@ export function estimateFromDimensions(
   dims: BuildingDimensions,
   floors: number,
   numFacades: number,
+  heightOverride_m?: number,
 ): AreaEstimate {
-  const height = floors * FLOOR_HEIGHT_M
+  const height = heightOverride_m ?? floors * FLOOR_HEIGHT_M
   // Assign side widths to each requested facade (repeating w,d,w,d pattern)
   const facadeWidths = Array.from({ length: numFacades }, (_, i) => {
     // sides_m is [w, d, w, d] for a rect; cycle if fewer sides defined
@@ -265,10 +269,11 @@ export function estimateFromDefaults(
   buildingType: BuildingType,
   floors: number,
   numFacades: number,
+  heightOverride_m?: number,
 ): AreaEstimate {
   const dims = BUILDING_DIMENSIONS[buildingType]
   const perimeter = 2 * (dims.width_m + dims.depth_m)
-  return estimateFromPerimeter(perimeter, floors, numFacades, "default")
+  return estimateFromPerimeter(perimeter, floors, numFacades, "default", heightOverride_m)
 }
 
 export function estimateFromRect(
@@ -276,9 +281,10 @@ export function estimateFromRect(
   depth_m: number,
   floors: number,
   numFacades: number,
+  heightOverride_m?: number,
 ): AreaEstimate {
   const perimeter = 2 * (width_m + depth_m)
-  return estimateFromPerimeter(perimeter, floors, numFacades, "manual-draw")
+  return estimateFromPerimeter(perimeter, floors, numFacades, "manual-draw", heightOverride_m)
 }
 
 /** Per-building rectangle bounds (from map draw) */
@@ -296,8 +302,9 @@ export function estimateFromMultiRects(
   numBuildings: number,
   floors: number,
   numFacades: number,
+  heightOverride_m?: number,
 ): AreaEstimate {
-  const height = floors * FLOOR_HEIGHT_M
+  const height = heightOverride_m ?? floors * FLOOR_HEIGHT_M
   const fallback = rects.find(r => r !== null) ?? null
   const perBuildingFacadeWidths: number[][] = []
   const perBuildingTotals: number[] = []
@@ -534,8 +541,9 @@ export function estimateFromMultiPerimeters(
   floors: number,
   numFacades: number,
   perBuildingNumFacades?: number[],
+  heightOverride_m?: number,
 ): AreaEstimate {
-  const height = floors * FLOOR_HEIGHT_M
+  const height = heightOverride_m ?? floors * FLOOR_HEIGHT_M
   const fallback = perimeters_m.find(p => p != null) ?? 80
   const perBuildingFacadeWidths: number[][] = []
   const resolvedPerBuildingNumFacades: number[] = []
