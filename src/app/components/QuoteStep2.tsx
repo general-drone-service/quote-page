@@ -48,6 +48,9 @@ export function QuoteStep2({
   mapContainerRef,
 }: Props) {
   const floors = formData.floors ?? 10
+  const heightMode = formData.heightMode ?? "floors"
+  const heightM = formData.heightM ?? floors * 3.5
+  const effectiveHeight = heightMode === "height" ? heightM : floors * 3.5
   const numFacades = formData.numFacades ?? 4
   const numBuildings = formData.numBuildings ?? 1
   const buildingType = formData.buildingType ?? "commercial"
@@ -108,26 +111,27 @@ export function QuoteStep2({
   }, [numFacades, numBuildings, drawnPolygons]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recalculate area estimate whenever inputs change
+  const ho = heightMode === "height" ? effectiveHeight : undefined
   useEffect(() => {
     const hasDrawn = drawnPolygons.some(p => p != null)
     if (numBuildings > 1 && hasDrawn) {
       setAreaEstimate(estimateFromMultiPerimeters(
         drawnPolygons.map(p => p?.perimeter_m ?? null),
-        numBuildings, floors, numFacades, perBuildingNumFacades,
+        numBuildings, floors, numFacades, perBuildingNumFacades, ho,
       ))
     } else if (drawnPolygons[0]) {
-      setAreaEstimate(estimateFromPerimeter(drawnPolygons[0].perimeter_m, floors, numFacades, "manual-draw"))
+      setAreaEstimate(estimateFromPerimeter(drawnPolygons[0].perimeter_m, floors, numFacades, "manual-draw", ho))
     } else if (overrideWidth && Number(overrideWidth) > 0) {
       const w = Number(overrideWidth)
-      setAreaEstimate(estimateFromPerimeter(w * numFacades, floors, numFacades, "manual-draw"))
+      setAreaEstimate(estimateFromPerimeter(w * numFacades, floors, numFacades, "manual-draw", ho))
     } else if (buildingDimensions && buildingDimensions.width_m > 0) {
-      setAreaEstimate(estimateFromDimensions(buildingDimensions, floors, numFacades))
+      setAreaEstimate(estimateFromDimensions(buildingDimensions, floors, numFacades, ho))
     } else if (buildingPerimeter && buildingPerimeter > 0) {
-      setAreaEstimate(estimateFromPerimeter(buildingPerimeter, floors, numFacades, "overpass"))
+      setAreaEstimate(estimateFromPerimeter(buildingPerimeter, floors, numFacades, "overpass", ho))
     } else {
-      setAreaEstimate(estimateFromDefaults(buildingType, floors, numFacades))
+      setAreaEstimate(estimateFromDefaults(buildingType, floors, numFacades, ho))
     }
-  }, [floors, numFacades, numBuildings, buildingType, buildingPerimeter, buildingDimensions, overrideWidth, drawnPolygons, setAreaEstimate]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [floors, heightMode, effectiveHeight, numFacades, numBuildings, buildingType, buildingPerimeter, buildingDimensions, overrideWidth, drawnPolygons, setAreaEstimate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Stable callback — uses ref to avoid map re-init when drawTarget changes
   const handlePolygonDraw = useCallback((
@@ -209,12 +213,48 @@ export function QuoteStep2({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-700 mb-1">樓層數</label>
-            <input type="number" value={floors}
-              onChange={e => updateForm({ floors: Math.max(1, parseInt(e.target.value) || 1) })}
-              min={1} max={100}
-              className="w-full px-3 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-            />
+            <label className="block text-sm font-medium text-zinc-700 mb-1">建物高度</label>
+            <div className="flex gap-1 mb-2">
+              <button type="button"
+                onClick={() => updateForm({ heightMode: "floors" })}
+                className={`flex-1 px-3 py-1.5 rounded-lg border text-sm transition-colors ${
+                  heightMode === "floors"
+                    ? "bg-blue-50 border-blue-400 text-blue-700 font-medium"
+                    : "border-zinc-300 text-zinc-600 hover:border-blue-300"
+                }`}
+              >
+                樓層數
+              </button>
+              <button type="button"
+                onClick={() => updateForm({ heightMode: "height", heightM: effectiveHeight })}
+                className={`flex-1 px-3 py-1.5 rounded-lg border text-sm transition-colors ${
+                  heightMode === "height"
+                    ? "bg-blue-50 border-blue-400 text-blue-700 font-medium"
+                    : "border-zinc-300 text-zinc-600 hover:border-blue-300"
+                }`}
+              >
+                直接輸入高度
+              </button>
+            </div>
+            {heightMode === "floors" ? (
+              <div className="flex items-center gap-2">
+                <input type="number" value={floors}
+                  onChange={e => updateForm({ floors: Math.max(1, parseInt(e.target.value) || 1) })}
+                  min={1} max={100}
+                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+                <span className="text-sm text-zinc-500 whitespace-nowrap">F（{effectiveHeight.toFixed(1)}m）</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <input type="number" value={heightM}
+                  onChange={e => updateForm({ heightM: Math.max(1, parseFloat(e.target.value) || 1) })}
+                  min={1} max={500} step={0.5}
+                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+                <span className="text-sm text-zinc-500 whitespace-nowrap">m（≈ {Math.round(heightM / 3.5)}F）</span>
+              </div>
+            )}
           </div>
 
           <div>
@@ -468,7 +508,7 @@ export function QuoteStep2({
                 )}
                 {areaEstimate.perBuildingTotals_m2 && areaEstimate.perBuildingTotals_m2.length > 1 ? (
                   <>
-                    <p>建物高度 = {floors}F × 3.5m = {areaEstimate.building_height_m}m</p>
+                    <p>建物高度 = {heightMode === "height" ? `${areaEstimate.building_height_m}m` : `${floors}F × 3.5m = ${areaEstimate.building_height_m}m`}</p>
                     {areaEstimate.perBuildingTotals_m2.map((total, i) => {
                       const drawn = !!drawnPolygons[i]
                       return (
@@ -503,7 +543,7 @@ export function QuoteStep2({
                     ) : (
                       <p>每面均寬 ≈ {areaEstimate.facade_width_m} m</p>
                     )}
-                    <p>建物高度 = {floors}F × 3.5m = {areaEstimate.building_height_m}m</p>
+                    <p>建物高度 = {heightMode === "height" ? `${areaEstimate.building_height_m}m` : `${floors}F × 3.5m = ${areaEstimate.building_height_m}m`}</p>
                     <p className="font-semibold text-base pt-1">
                       {areaEstimate.project_total_m2 != null ? (
                         <>各棟合計 ≈ {areaEstimate.project_total_m2.toLocaleString()} ㎡</>

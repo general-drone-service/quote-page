@@ -52,6 +52,8 @@ export function LineQuoteCta({ pricing, timeResult, formData, areaEstimate, buil
             address: formData.address,
             buildingType: formData.buildingType,
             floors: formData.floors,
+            heightMode: formData.heightMode,
+            heightM: formData.heightM,
             numBuildings: formData.numBuildings,
             serviceType: formData.serviceType,
             timeSlot: formData.timeSlot,

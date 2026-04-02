@@ -65,9 +65,14 @@ export function QuoteStep3({
     const rooftopAccess = formData.rooftopAccess ?? "Good"
     const cleaningAgent = formData.cleaningAgent ?? "standard"
 
+    // When using direct height mode, derive equivalent floors for multiplier lookups
+    const effectiveFloors = formData.heightMode === "height" && formData.heightM
+      ? Math.ceil(formData.heightM / 3.5)
+      : formData.floors
+
     setPricing(generateQuote({
       buildingType: formData.buildingType,
-      floors: formData.floors,
+      floors: effectiveFloors,
       facades,
       contamination,
       cleaningAgent,
@@ -81,7 +86,7 @@ export function QuoteStep3({
     setTimeResult(estimateTime({
       missionType: mapServiceToMissionType(formData.serviceType),
       buildingType: formData.buildingType,
-      floors: formData.floors,
+      floors: effectiveFloors,
       wind_ms: 4,
       facades,
       contamination,
@@ -167,7 +172,9 @@ export function QuoteStep3({
             )}
             <InfoRow
               label="建物"
-              value={`${BUILDING_LABELS[formData.buildingType] ?? formData.buildingType} ${formData.floors}F（${(formData.floors * 3.5).toFixed(1)}m）`}
+              value={formData.heightMode === "height" && formData.heightM
+                ? `${BUILDING_LABELS[formData.buildingType] ?? formData.buildingType} ${formData.heightM}m（≈ ${Math.round(formData.heightM / 3.5)}F）`
+                : `${BUILDING_LABELS[formData.buildingType] ?? formData.buildingType} ${formData.floors}F（${(formData.floors * 3.5).toFixed(1)}m）`}
             />
             {(formData.numBuildings ?? 1) > 1 && (
               <InfoRow label="棟數" value={`${formData.numBuildings} 棟`} />
