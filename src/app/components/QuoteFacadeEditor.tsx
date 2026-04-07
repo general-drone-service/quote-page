@@ -1,9 +1,11 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import type { Complexity, Supply } from "@/lib/types"
 import type { QuoteFacadeInput, DirtType, PowerVoltage } from "./quote-defaults"
 import { DIRT_TYPE_OPTIONS, COMPLEXITY_OPTIONS } from "./quote-defaults"
+import { ExamplePopover } from "./ExamplePopover"
+import { DIRT_EXAMPLES, COMPLEXITY_EXAMPLES } from "./example-popover-data"
 
 const BUILDING_LABELS = ["A", "B", "C", "D", "E", "F"]
 
@@ -179,6 +181,22 @@ function FacadeCard({
   const photoRef = useRef<HTMLInputElement>(null)
   const supplyPhotoRef = useRef<HTMLInputElement>(null)
 
+  // ── Example popover state ───────────────────────────────────────────────────
+  const [popover, setPopover] = useState<{ type: "dirt" | "complexity"; value: string; el: HTMLElement } | null>(null)
+  const closePopover = useCallback(() => setPopover(null), [])
+
+  function handlePopoverEnter(type: "dirt" | "complexity", value: string, el: HTMLElement, pointerType: string) {
+    if (pointerType === "mouse") setPopover({ type, value, el })
+  }
+  function handlePopoverLeave(pointerType: string) {
+    if (pointerType === "mouse") setPopover(null)
+  }
+  function handlePopoverTap(type: "dirt" | "complexity", value: string, el: HTMLElement, pointerType: string) {
+    if (pointerType === "touch") {
+      setPopover(prev => (prev?.type === type && prev?.value === value) ? null : { type, value, el })
+    }
+  }
+
   // ── Theme tokens ────────────────────────────────────────────────────────────
   const t = dark ? {
     card:        "border-zinc-700 bg-zinc-800/40",
@@ -241,7 +259,11 @@ function FacadeCard({
           {DIRT_TYPE_OPTIONS.map(opt => {
             const active = facade.dirtTypes.includes(opt.value)
             return (
-              <button key={opt.value} type="button" onClick={() => onToggleDirt(opt.value)}
+              <button key={opt.value} type="button"
+                onClick={() => onToggleDirt(opt.value)}
+                onPointerEnter={e => handlePopoverEnter("dirt", opt.value, e.currentTarget, e.pointerType)}
+                onPointerLeave={e => handlePopoverLeave(e.pointerType)}
+                onPointerDown={e => handlePopoverTap("dirt", opt.value, e.currentTarget, e.pointerType)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border transition-colors ${
                   active ? t.dirtOn : t.dirtOff
                 }`}>
@@ -257,7 +279,11 @@ function FacadeCard({
         <p className={`text-xs font-medium mb-2 ${t.heading}`}>立面複雜程度</p>
         <div className="flex gap-2">
           {COMPLEXITY_OPTIONS.map(opt => (
-            <button key={opt.value} type="button" onClick={() => onComplexity(opt.value)}
+            <button key={opt.value} type="button"
+              onClick={() => onComplexity(opt.value)}
+              onPointerEnter={e => handlePopoverEnter("complexity", opt.value, e.currentTarget, e.pointerType)}
+              onPointerLeave={e => handlePopoverLeave(e.pointerType)}
+              onPointerDown={e => handlePopoverTap("complexity", opt.value, e.currentTarget, e.pointerType)}
               title={opt.desc}
               className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
                 facade.complexity === opt.value ? t.btnCompOn : t.btnCompOff
@@ -368,6 +394,17 @@ function FacadeCard({
         <input ref={photoRef} type="file" accept="image/*" multiple className="hidden"
           onChange={e => onPhotoUpload(e.target.files)} />
       </div>
+
+      {/* Example popover */}
+      {popover && (
+        <ExamplePopover
+          anchorEl={popover.el}
+          open
+          onClose={closePopover}
+          info={popover.type === "dirt" ? DIRT_EXAMPLES[popover.value] : COMPLEXITY_EXAMPLES[popover.value]}
+          dark={dark}
+        />
+      )}
     </div>
   )
 }

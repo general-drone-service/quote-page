@@ -12,6 +12,8 @@ import {
 import { QuoteMap } from "./QuoteMap"
 import type { PersistedShape } from "./QuoteMap"
 import { QuoteFacadeEditor } from "./QuoteFacadeEditor"
+import { ExamplePopover } from "./ExamplePopover"
+import { CLEANING_AGENT_EXAMPLES } from "./example-popover-data"
 
 interface Props {
   formData: Partial<QuoteFormData>
@@ -161,6 +163,10 @@ export function QuoteStep2({
     updateForm({ facadeInputs: facades })
   }, [updateForm])
 
+  // Cleaning agent popover state
+  const [agentPopover, setAgentPopover] = useState<{ value: string; el: HTMLElement } | null>(null)
+  const closeAgentPopover = useCallback(() => setAgentPopover(null), [])
+
   // Build persisted shapes for map display (with per-edge face labels)
   const persistedShapes: PersistedShape[] = []
   drawnPolygons.forEach((p, i) => {
@@ -292,15 +298,40 @@ export function QuoteStep2({
               清潔方式
               <span className="text-xs font-normal text-zinc-400 ml-1">（整案）</span>
             </label>
-            <select
-              value={formData.cleaningAgent ?? "standard"}
-              onChange={e => updateForm({ cleaningAgent: e.target.value as CleaningAgent })}
-              className="w-full px-3 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-            >
-              {CLEANING_AGENT_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+            <div className="flex flex-col gap-2">
+              {CLEANING_AGENT_OPTIONS.map(o => {
+                const active = (formData.cleaningAgent ?? "standard") === o.value
+                return (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => updateForm({ cleaningAgent: o.value as CleaningAgent })}
+                    onPointerEnter={e => { if (e.pointerType === "mouse") setAgentPopover({ value: o.value, el: e.currentTarget }) }}
+                    onPointerLeave={e => { if (e.pointerType === "mouse") setAgentPopover(null) }}
+                    onPointerDown={e => {
+                      if (e.pointerType === "touch") {
+                        setAgentPopover(prev => prev?.value === o.value ? null : { value: o.value, el: e.currentTarget })
+                      }
+                    }}
+                    className={`px-3 py-2 rounded-lg text-sm border text-left transition-colors ${
+                      active
+                        ? "bg-blue-600 text-white border-blue-600 font-medium"
+                        : "bg-white text-zinc-600 border-zinc-300 hover:border-blue-400"
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                )
+              })}
+            </div>
+            {agentPopover && CLEANING_AGENT_EXAMPLES[agentPopover.value] && (
+              <ExamplePopover
+                anchorEl={agentPopover.el}
+                open
+                onClose={closeAgentPopover}
+                info={CLEANING_AGENT_EXAMPLES[agentPopover.value]}
+              />
+            )}
           </div>
 
           <div>
