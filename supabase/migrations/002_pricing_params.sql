@@ -19,8 +19,8 @@ insert into public.pricing_params (version, params, notes, is_active, created_by
 values (
   'v1.0',
   '{
-    "base_price": {"commercial": 14, "luxury": 15, "house": 200, "factory": 26, "solar": 9.5},
-    "complexity_surcharge": {"light": 4, "medium": 6, "heavy": 8},
+    "base_price": {"commercial": 13, "luxury": 14, "house": 200, "factory": 22, "solar": 9.5},
+    "complexity_surcharge": {"light": 3, "medium": 5, "heavy": 8},
     "contamination_surcharge": {"dust": 0, "scale": 3.5, "bird": 2, "mold": 2.5, "exhaust": 3, "grease": 6},
     "contamination_cap": 7.5,
     "cleaning_agent_surcharge": {"soft": -1, "standard": 1, "deep": 3},

@@ -62,16 +62,16 @@ export interface PricingParams {
 
 export const PRICING_PARAMS_DEFAULT: PricingParams = {
   base_price: {
-    commercial: 14,
-    luxury: 15,
+    commercial: 13,
+    luxury: 14,
     house: 200,
-    factory: 26,
+    factory: 22,
     solar: 9.5,
   },
 
   complexity_surcharge: {
-    light: 4,
-    medium: 6,
+    light: 3,
+    medium: 5,
     heavy: 8,
   },
 
