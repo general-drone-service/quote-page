@@ -19,11 +19,11 @@ insert into public.pricing_params (version, params, notes, is_active, created_by
 values (
   'v1.0',
   '{
-    "base_price": {"commercial": 14, "luxury": 15, "house": 200, "factory": 26, "solar": 9.5},
-    "complexity_surcharge": {"light": 4, "medium": 6, "heavy": 8},
-    "contamination_surcharge": {"dust": 0, "scale": 3.5, "bird": 2, "mold": 2.5, "exhaust": 3, "grease": 6},
-    "contamination_cap": 7.5,
-    "cleaning_agent_surcharge": {"soft": -1, "standard": 1, "deep": 3},
+    "base_price": {"commercial": 13, "luxury": 14, "house": 200, "factory": 22, "solar": 9.5},
+    "complexity_surcharge": {"light": -1, "medium": 5, "heavy": 8},
+    "contamination_surcharge": {"dust": 0, "scale": 3.5, "bird": 1.5, "mold": 1.5, "exhaust": 2, "grease": 5},
+    "contamination_cap": 8,
+    "cleaning_agent_surcharge": {"soft": -1, "standard": 1, "deep": 2.5},
     "facade_surcharges": {"road_closure": 2, "tight_perimeter": 3, "high_risk_env": 3.5, "adjacent_trees": 2.5, "tree_extra": 5},
     "supply_surcharges": {"water_self": 3.5, "power_self": 3.5, "rooftop_not_good": 6},
     "floor_multiplier": [{"max_floor": 10, "multiplier": 1.0}, {"max_floor": 20, "multiplier": 1.05}, {"max_floor": 30, "multiplier": 1.12}, {"max_floor": 9999, "multiplier": 1.25}],
@@ -31,6 +31,7 @@ values (
     "urgent_multiplier": 1.33,
     "min_order": 30000,
     "quote_max_multiplier": 2.5,
+    "final_discount": 0.9,
     "version": "v1.0"
   }'::jsonb,
   'Initial pricing parameters (migrated from code defaults)',

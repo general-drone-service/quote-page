@@ -54,6 +54,9 @@ export interface PricingParams {
   /** Maximum combined multiplier before manual review is triggered */
   quote_max_multiplier: number
 
+  /** Final discount applied to total to produce official quote price (e.g. 0.9 = 90%) */
+  final_discount: number
+
   /** Version tag */
   version: string
 }
@@ -62,33 +65,33 @@ export interface PricingParams {
 
 export const PRICING_PARAMS_DEFAULT: PricingParams = {
   base_price: {
-    commercial: 14,
-    luxury: 15,
+    commercial: 13,
+    luxury: 14,
     house: 200,
-    factory: 26,
+    factory: 22,
     solar: 9.5,
   },
 
   complexity_surcharge: {
-    light: 4,
-    medium: 6,
+    light: -1,
+    medium: 5,
     heavy: 8,
   },
 
   contamination_surcharge: {
     dust: 0,
     scale: 3.5,
-    bird: 2,
-    mold: 2.5,
-    exhaust: 3,
-    grease: 6,
+    bird: 1.5,
+    mold: 1.5,
+    exhaust: 2,
+    grease: 5,
   },
-  contamination_cap: 7.5,
+  contamination_cap: 8,
 
   cleaning_agent_surcharge: {
     soft: -1,
     standard: 1,
-    deep: 3,
+    deep: 2.5,
   },
 
   facade_surcharges: {
@@ -123,6 +126,8 @@ export const PRICING_PARAMS_DEFAULT: PricingParams = {
   min_order: 30000,
 
   quote_max_multiplier: 2.5,
+
+  final_discount: 0.9,
 
   version: "v1.0",
 }

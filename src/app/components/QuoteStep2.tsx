@@ -188,8 +188,8 @@ export function QuoteStep2({
     persistedShapes.push({
       vertices: p.vertices,
       label: isSingleFacade
-        ? (numBuildings > 1 ? `棟${bLabel}（單面）` : "已繪單面")
-        : (numBuildings > 1 ? `棟${bLabel}` : "已繪範圍"),
+        ? (numBuildings > 1 ? `棟${bLabel}（單面）` : "")
+        : (numBuildings > 1 ? `棟${bLabel}` : ""),
       edgeLabels,
     })
   })

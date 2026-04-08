@@ -300,11 +300,11 @@ export function generateQuotePdf(input: QuotePdfInput): Buffer {
 
   doc.setFontSize(10)
   setColor("#BFDBFE") // blue-200
-  doc.text("報價總額", margin + 5, y + 2)
+  doc.text("正式報價", margin + 5, y + 2)
 
   doc.setFontSize(18)
   setColor("#FFFFFF")
-  doc.text(`NTD ${pricing.total.toLocaleString()}`, margin + 5, y + 11)
+  doc.text(`NTD ${pricing.final_price.toLocaleString()}`, margin + 5, y + 11)
 
   doc.setFontSize(10)
   setColor("#BFDBFE")

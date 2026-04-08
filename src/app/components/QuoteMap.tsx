@@ -376,13 +376,15 @@ export function QuoteMap({
         if (!shape.vertices?.length) continue
         const isSingleFacade = shape.vertices.length === 2
         // 2 vertices → polyline (single facade); ≥3 → polygon
-        const layer = isSingleFacade
+        const baseLayer = isSingleFacade
           ? L.polyline(shape.vertices, {
               color: "#16a34a", weight: 3, dashArray: "8 4",
-            }).bindTooltip(shape.label, { permanent: true, direction: "center" }).addTo(m)
+            })
           : L.polygon(shape.vertices, {
               color: "#16a34a", weight: 2, fillColor: "#22c55e", fillOpacity: 0.2,
-            }).bindTooltip(shape.label, { permanent: true, direction: "center" }).addTo(m)
+            })
+        if (shape.label) baseLayer.bindTooltip(shape.label, { permanent: true, direction: "center" })
+        const layer = baseLayer.addTo(m)
         persistedLayersRef.current.push(layer)
 
         // Add numbered face labels at each edge midpoint

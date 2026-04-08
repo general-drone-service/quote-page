@@ -36,7 +36,7 @@ export function LineQuoteCta({ pricing, timeResult, formData, areaEstimate, buil
         building_name: buildingName || undefined,
         floors:        formData.floors,
         total_area_m2: totalArea,
-        total_ntd:     pricing.total,
+        total_ntd:     pricing.final_price,
         suggested_days: timeResult.suggested_days,
       })
 
