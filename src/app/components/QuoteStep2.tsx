@@ -66,17 +66,22 @@ export function QuoteStep2({
   useEffect(() => { drawTargetRef.current = drawTarget }, [drawTarget])
 
   // Per-building face counts from polygon vertices
+  // 2 vertices = single facade (1 face), ≥3 vertices = polygon (N faces)
   const perBuildingNumFacades: number[] = Array.from({ length: numBuildings }, (_, b) => {
     const poly = drawnPolygons[b]
+    if (poly && poly.vertices.length === 2) return 1
     if (poly && poly.vertices.length >= 3) return poly.vertices.length
     if (b === 0 && buildingPolygon && buildingPolygon.length >= 3) return buildingPolygon.length
     return numFacades
   })
 
   // Auto-derive numFacades from polygon vertices (single-building or first building)
+  // 2 vertices = single facade (1 face), ≥3 vertices = polygon (N faces)
   useEffect(() => {
     const drawnPoly = drawnPolygons[0]
-    if (drawnPoly && drawnPoly.vertices.length >= 3) {
+    if (drawnPoly && drawnPoly.vertices.length === 2) {
+      updateForm({ numFacades: 1 })
+    } else if (drawnPoly && drawnPoly.vertices.length >= 3) {
       updateForm({ numFacades: drawnPoly.vertices.length })
     } else if (buildingPolygon && buildingPolygon.length >= 3) {
       updateForm({ numFacades: buildingPolygon.length })
@@ -85,6 +90,7 @@ export function QuoteStep2({
     if (numBuildings > 1) {
       const counts = Array.from({ length: numBuildings }, (_, b) => {
         const poly = drawnPolygons[b]
+        if (poly && poly.vertices.length === 2) return 1
         if (poly && poly.vertices.length >= 3) return poly.vertices.length
         return numFacades
       })
@@ -172,12 +178,18 @@ export function QuoteStep2({
   drawnPolygons.forEach((p, i) => {
     if (!p) return
     const bLabel = numBuildings > 1 ? (BUILDING_LABELS[i] ?? String(i + 1)) : ""
-    const edgeLabels = p.vertices.map((_, ei) =>
-      bLabel ? `${bLabel}棟-${ei + 1}面` : `${ei + 1}面`
-    )
+    const isSingleFacade = p.vertices.length === 2
+    // Single facade (2 verts) → 1 edge label; polygon → N edge labels
+    const edgeLabels = isSingleFacade
+      ? [bLabel ? `${bLabel}棟-1面` : `1面`]
+      : p.vertices.map((_, ei) =>
+          bLabel ? `${bLabel}棟-${ei + 1}面` : `${ei + 1}面`
+        )
     persistedShapes.push({
       vertices: p.vertices,
-      label: numBuildings > 1 ? `棟${bLabel}` : "已繪範圍",
+      label: isSingleFacade
+        ? (numBuildings > 1 ? `棟${bLabel}（單面）` : "已繪單面")
+        : (numBuildings > 1 ? `棟${bLabel}` : "已繪範圍"),
       edgeLabels,
     })
   })
@@ -436,14 +448,16 @@ export function QuoteStep2({
                       ✏️ {drawMode ? "繪製中 — 按此取消" : "點擊繪製建物範圍"}
                     </button>
                     {drawMode && (
-                      <span className="text-xs text-zinc-500">點擊地圖逐點加入頂點，點擊起點（紅圓）閉合</span>
+                      <span className="text-xs text-zinc-500">逐點加入頂點；2點=單面，≥3點=多面；點擊起點（紅圓）或雙擊完成</span>
                     )}
                     {drawnPolygons[0] && !drawMode && (
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-lg font-medium">
-                          {Math.round(drawnPolygons[0].area_m2).toLocaleString()} ㎡
+                          {drawnPolygons[0].vertices.length === 2
+                            ? `單面 · 寬 ${Math.round(drawnPolygons[0].perimeter_m)} m`
+                            : `${Math.round(drawnPolygons[0].area_m2).toLocaleString()} ㎡`}
                           <span className="font-normal ml-1 opacity-70">
-                            · {drawnPolygons[0].vertices.length} 頂點
+                            · {drawnPolygons[0].vertices.length === 2 ? "2 頂點（單面）" : `${drawnPolygons[0].vertices.length} 頂點`}
                           </span>
                         </span>
                         <button
@@ -500,7 +514,7 @@ export function QuoteStep2({
                   </div>
                   {drawMode && (
                     <span className="text-xs text-zinc-400">
-                      點擊地圖逐點加入頂點，點擊起點閉合棟{BUILDING_LABELS[drawTarget] ?? drawTarget + 1}範圍
+                      逐點加入頂點；2點=單面，≥3點=多面；點擊起點或雙擊完成棟{BUILDING_LABELS[drawTarget] ?? drawTarget + 1}
                     </span>
                   )}
                 </div>
@@ -560,7 +574,9 @@ export function QuoteStep2({
                   <>
                     {drawnPolygons[0] && (
                       <p className="text-xs text-blue-700 opacity-80">
-                        多邊形周長 ≈ {Math.round(drawnPolygons[0].perimeter_m)} m
+                        {drawnPolygons[0].vertices.length === 2
+                          ? `單面寬度 ≈ ${Math.round(drawnPolygons[0].perimeter_m)} m`
+                          : `多邊形周長 ≈ ${Math.round(drawnPolygons[0].perimeter_m)} m`}
                       </p>
                     )}
                     {!areaEstimate.perBuildingFacadeWidths && areaEstimate.facadeWidths_m && areaEstimate.facadeWidths_m.length > 1 ? (

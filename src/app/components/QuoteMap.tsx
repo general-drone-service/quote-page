@@ -20,7 +20,7 @@ interface Props {
   drawLabel?: string
   /** Saved polygon shapes to display persistently on the map */
   persistedShapes?: PersistedShape[]
-  /** Called when polygon is closed (≥3 vertices) */
+  /** Called when shape is closed (≥2 vertices: 2=single facade line, ≥3=polygon) */
   onPolygonDraw?: (vertices: [number, number][], area_m2: number, perimeter_m: number) => void
   /** Called after polygon is successfully closed (so parent can exit draw mode) */
   onDrawModeEnd?: () => void
@@ -203,18 +203,22 @@ export function QuoteMap({
         }
 
         const closePolygon = () => {
-          if (vertices.length < 3 || isCompleteRef.current) return
+          if (vertices.length < 2 || isCompleteRef.current) return
           isCompleteRef.current = true
 
           // Capture before clearInProgress() resets the vertices array
           const verts: [number, number][] = vertices.map(v => [v.lat, v.lng])
-          const area = polygonArea(verts)
-          const perim = polygonPerimeter(verts)
+          const area = polygonArea(verts) // returns 0 for <3 vertices
+          // For 2 vertices (single facade line), perimeter = edge length (not round-trip)
+          const perim = verts.length === 2
+            ? haversineM(verts[0][0], verts[0][1], verts[1][0], verts[1][1])
+            : polygonPerimeter(verts)
 
           clearInProgress()
 
-          dimDiv.textContent =
-            `${drawLabelRef.current ? drawLabelRef.current + "  " : ""}${Math.round(area).toLocaleString()} ㎡ · 周長 ${Math.round(perim)} m`
+          dimDiv.textContent = verts.length === 2
+            ? `${drawLabelRef.current ? drawLabelRef.current + "  " : ""}單面寬 ${Math.round(perim)} m`
+            : `${drawLabelRef.current ? drawLabelRef.current + "  " : ""}${Math.round(area).toLocaleString()} ㎡ · 周長 ${Math.round(perim)} m`
           dimDiv.style.display = "block"
           setTimeout(() => { dimDiv.style.display = "none" }, 3000)
 
@@ -235,8 +239,8 @@ export function QuoteMap({
         map.on("click", (e: L.LeafletMouseEvent) => {
           if (!drawModeRef.current || isCompleteRef.current) return
 
-          // Snap to first vertex to close
-          if (vertices.length >= 3) {
+          // Snap to first vertex to close (≥2 for single facade, ≥3 for polygon)
+          if (vertices.length >= 2) {
             const dist = e.latlng.distanceTo(vertices[0])
             if (dist <= SNAP_M) {
               closePolygon()
@@ -284,8 +288,8 @@ export function QuoteMap({
             { color: "#2563eb", weight: 1.5, dashArray: "6 4" }
           ).addTo(map)
 
-          // Snap hint: highlight first vertex
-          if (vertices.length >= 3 && vertexMarkers[0]) {
+          // Snap hint: highlight first vertex (≥2 for single facade, ≥3 for polygon)
+          if (vertices.length >= 2 && vertexMarkers[0]) {
             const dist = e.latlng.distanceTo(vertices[0])
             const near = dist <= SNAP_M
             vertexMarkers[0].setStyle({
@@ -293,15 +297,16 @@ export function QuoteMap({
               radius: near ? 11 : 8,
               color: near ? "#dc2626" : "#2563eb",
             })
+            hintDiv.textContent = vertices.length === 2 ? "點擊確認單面" : "點擊閉合多邊形"
             hintDiv.style.display = near ? "block" : "none"
           }
         })
 
-        // ── Double-click: close polygon ────────────────────────────────────────
+        // ── Double-click: close shape (≥2 vertices) ──────────────────────────
         map.on("dblclick", (e: L.LeafletMouseEvent) => {
           if (!drawModeRef.current || isCompleteRef.current) return
           L.DomEvent.stop(e)
-          if (vertices.length >= 3) closePolygon()
+          if (vertices.length >= 2) closePolygon()
         })
       }
 
@@ -369,14 +374,21 @@ export function QuoteMap({
       if (!persistedShapes?.length) return
       for (const shape of persistedShapes) {
         if (!shape.vertices?.length) continue
-        const layer = L.polygon(shape.vertices, {
-          color: "#16a34a", weight: 2, fillColor: "#22c55e", fillOpacity: 0.2,
-        }).bindTooltip(shape.label, { permanent: true, direction: "center" }).addTo(m)
+        const isSingleFacade = shape.vertices.length === 2
+        // 2 vertices → polyline (single facade); ≥3 → polygon
+        const layer = isSingleFacade
+          ? L.polyline(shape.vertices, {
+              color: "#16a34a", weight: 3, dashArray: "8 4",
+            }).bindTooltip(shape.label, { permanent: true, direction: "center" }).addTo(m)
+          : L.polygon(shape.vertices, {
+              color: "#16a34a", weight: 2, fillColor: "#22c55e", fillOpacity: 0.2,
+            }).bindTooltip(shape.label, { permanent: true, direction: "center" }).addTo(m)
         persistedLayersRef.current.push(layer)
 
         // Add numbered face labels at each edge midpoint
+        const edgeCount = isSingleFacade ? 1 : shape.vertices.length
         if (shape.edgeLabels?.length) {
-          for (let ei = 0; ei < shape.vertices.length; ei++) {
+          for (let ei = 0; ei < edgeCount; ei++) {
             const v1 = shape.vertices[ei]
             const v2 = shape.vertices[(ei + 1) % shape.vertices.length]
             const midLat = (v1[0] + v2[0]) / 2
