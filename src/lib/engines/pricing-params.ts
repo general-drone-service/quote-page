@@ -70,7 +70,7 @@ export const PRICING_PARAMS_DEFAULT: PricingParams = {
   },
 
   complexity_surcharge: {
-    light: 3,
+    light: -1,
     medium: 5,
     heavy: 8,
   },
@@ -78,17 +78,17 @@ export const PRICING_PARAMS_DEFAULT: PricingParams = {
   contamination_surcharge: {
     dust: 0,
     scale: 3.5,
-    bird: 2,
-    mold: 2.5,
-    exhaust: 3,
-    grease: 6,
+    bird: 1.5,
+    mold: 1.5,
+    exhaust: 2,
+    grease: 5,
   },
-  contamination_cap: 7.5,
+  contamination_cap: 8,
 
   cleaning_agent_surcharge: {
     soft: -1,
     standard: 1,
-    deep: 3,
+    deep: 2.5,
   },
 
   facade_surcharges: {
