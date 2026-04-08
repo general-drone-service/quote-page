@@ -122,26 +122,9 @@ export function QuoteStep3({
   // project_total_m2 is set when buildings have different sizes; otherwise multiply
   const totalArea = areaEstimate.project_total_m2 ?? (areaEstimate.total_area_m2 * numBuildings)
 
-  // Group line items by building for display
-  type BldgGroup = { name: string; area: number; subtotal: number; facades: number }
-  const bldgGroups: BldgGroup[] = []
-  const extraItems: typeof pricing.line_items = []
-  for (const item of pricing.line_items) {
-    if (item.code.startsWith("FACE-")) {
-      // code format: "FACE-{buildingIdx}-{facadeIdx}"
-      const bIdx = parseInt(item.code.slice(5).split("-")[0])
-      while (bldgGroups.length <= bIdx) bldgGroups.push({ name: "", area: 0, subtotal: 0, facades: 0 })
-      const grp = bldgGroups[bIdx]
-      grp.name = numBuildings > 1
-        ? `棟 ${["A","B","C","D","E","F"][bIdx] ?? bIdx + 1}`
-        : "施作費用"
-      grp.area += item.area_m2 ?? 0
-      grp.subtotal += item.subtotal
-      grp.facades++
-    } else {
-      extraItems.push(item)
-    }
-  }
+  // Separate line items by type
+  const faceItems = pricing.line_items.filter(item => item.code.startsWith("FACE-"))
+  const extraItems = pricing.line_items.filter(item => !item.code.startsWith("FACE-"))
 
   return (
     <div className="space-y-6">
@@ -278,20 +261,17 @@ export function QuoteStep3({
               </tr>
             </thead>
             <tbody>
-              {bldgGroups.filter(Boolean).map((grp, idx) => (
-                <tr key={`bldg-${idx}`} className="border-b border-zinc-100">
-                  <td className="py-2">
-                    {grp.name}
-                    <span className="text-xs text-zinc-400 ml-1">（{grp.facades} 面）</span>
-                  </td>
+              {faceItems.map((item) => (
+                <tr key={item.code} className="border-b border-zinc-100">
+                  <td className="py-2">{item.label}</td>
                   <td className="text-right py-2 text-zinc-600">
-                    {grp.area.toLocaleString()} ㎡
+                    {item.area_m2 != null ? `${item.area_m2.toLocaleString()} ㎡` : "—"}
                   </td>
                   <td className="text-right py-2 text-zinc-500 text-xs">
-                    {grp.area > 0 && Number.isFinite(grp.subtotal) ? `${Math.round(grp.subtotal / grp.area)} NTD/㎡` : "—"}
+                    {item.unit_price != null ? `${item.unit_price} NTD/㎡` : "—"}
                   </td>
                   <td className="text-right py-2 font-medium">
-                    {Number.isFinite(grp.subtotal) ? `${grp.subtotal.toLocaleString()} NTD` : "— NTD"}
+                    {item.subtotal.toLocaleString()} NTD
                   </td>
                 </tr>
               ))}
@@ -343,9 +323,7 @@ export function QuoteStep3({
         <div className="px-4 sm:px-6 py-5 bg-blue-600 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-blue-200 text-sm">計算總額</p>
-              <p className="text-lg line-through opacity-70">NTD {pricing.total.toLocaleString()}</p>
-              <p className="text-blue-200 text-sm mt-1">正式報價（{Math.round(pricing.final_discount * 100)}% off）</p>
+              <p className="text-blue-200 text-sm">報價總額</p>
               <p className="text-3xl font-bold">NTD {pricing.final_price.toLocaleString()}</p>
             </div>
             <div className="text-right">

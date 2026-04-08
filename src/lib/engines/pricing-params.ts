@@ -73,31 +73,31 @@ export const PRICING_PARAMS_DEFAULT: PricingParams = {
   },
 
   complexity_surcharge: {
-    light: -1,
+    light: 0,
     medium: 5,
     heavy: 8,
   },
 
   contamination_surcharge: {
-    dust: 0,
-    scale: 3.5,
-    bird: 1.5,
-    mold: 1.5,
-    exhaust: 2,
+    dust: 1,
+    scale: 5,
+    bird: 2.5,
+    mold: 2.5,
+    exhaust: 4,
     grease: 5,
   },
-  contamination_cap: 8,
+  contamination_cap: 12,
 
   cleaning_agent_surcharge: {
-    soft: -1,
-    standard: 1,
-    deep: 2.5,
+    soft: 1,
+    standard: 1.5,
+    deep: 3,
   },
 
   facade_surcharges: {
-    road_closure: 2,
-    tight_perimeter: 3,
-    high_risk_env: 3.5,
+    road_closure: 3.5,
+    tight_perimeter: 5,
+    high_risk_env: 5,
     adjacent_trees: 2.5,
     tree_extra: 5,
   },
