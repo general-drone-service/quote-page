@@ -315,6 +315,8 @@ export interface PricingResult {
   multiplier: number
   multiplier_breakdown: Record<string, number>
   total: number
+  final_discount: number
+  final_price: number
   currency: string
   quote_code: string
   valid_until: string

@@ -31,6 +31,7 @@ values (
     "urgent_multiplier": 1.33,
     "min_order": 30000,
     "quote_max_multiplier": 2.5,
+    "final_discount": 0.9,
     "version": "v1.0"
   }'::jsonb,
   'Initial pricing parameters (migrated from code defaults)',

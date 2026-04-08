@@ -54,6 +54,9 @@ export interface PricingParams {
   /** Maximum combined multiplier before manual review is triggered */
   quote_max_multiplier: number
 
+  /** Final discount applied to total to produce official quote price (e.g. 0.9 = 90%) */
+  final_discount: number
+
   /** Version tag */
   version: string
 }
@@ -123,6 +126,8 @@ export const PRICING_PARAMS_DEFAULT: PricingParams = {
   min_order: 30000,
 
   quote_max_multiplier: 2.5,
+
+  final_discount: 0.9,
 
   version: "v1.0",
 }

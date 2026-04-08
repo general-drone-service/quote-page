@@ -117,6 +117,8 @@ export function generateQuote(input: PricingEngineInput, params?: PricingParams)
   const requiresManualReview = combinedMultiplier > maxMult
   const multiplier = Math.min(maxMult, combinedMultiplier)
   const total = Math.round(subtotal * multiplier)
+  const finalDiscount = P.final_discount ?? 1
+  const finalPrice = Math.round(total * finalDiscount)
 
   const today = new Date()
   const validUntil = new Date(today)
@@ -133,6 +135,8 @@ export function generateQuote(input: PricingEngineInput, params?: PricingParams)
       urgent: mUrgent,
     },
     total,
+    final_discount: finalDiscount,
+    final_price: finalPrice,
     currency: "NTD",
     quote_code: quoteCode,
     valid_until: validUntil.toISOString().split("T")[0],

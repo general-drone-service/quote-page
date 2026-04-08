@@ -343,8 +343,10 @@ export function QuoteStep3({
         <div className="px-4 sm:px-6 py-5 bg-blue-600 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-blue-200 text-sm">報價總額</p>
-              <p className="text-3xl font-bold">NTD {pricing.total.toLocaleString()}</p>
+              <p className="text-blue-200 text-sm">計算總額</p>
+              <p className="text-lg line-through opacity-70">NTD {pricing.total.toLocaleString()}</p>
+              <p className="text-blue-200 text-sm mt-1">正式報價（{Math.round(pricing.final_discount * 100)}% off）</p>
+              <p className="text-3xl font-bold">NTD {pricing.final_price.toLocaleString()}</p>
             </div>
             <div className="text-right">
               <p className="text-blue-200 text-sm">預估工期</p>

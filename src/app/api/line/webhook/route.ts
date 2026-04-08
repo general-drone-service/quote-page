@@ -131,14 +131,14 @@ async function handleTextMessage(replyToken: string, text: string) {
     return
   }
 
-  const pricing = quote.pricing as { total: number; valid_until: string }
+  const pricing = quote.pricing as { total: number; final_price: number; valid_until: string }
   const timeResult = quote.time_result as { suggested_days: number }
   const validUntil = (quote.expires_at as string) ?? pricing.valid_until
 
   await lineReply(replyToken, [
     {
       type: "flex",
-      altText: `您的報價單 ${quote.quote_code} — NTD ${pricing.total.toLocaleString()}`,
+      altText: `您的報價單 ${quote.quote_code} — NTD ${pricing.final_price.toLocaleString()}`,
       contents: {
         type: "bubble",
         size: "mega",
@@ -154,8 +154,8 @@ async function handleTextMessage(replyToken: string, text: string) {
           contents: [
             {
               type: "box", layout: "horizontal", contents: [
-                { type: "text", text: "報價總額", color: "#71717A", size: "sm", flex: 1 },
-                { type: "text", text: `NTD ${pricing.total.toLocaleString()}`, color: "#2563EB", weight: "bold", size: "lg", flex: 2, align: "end" },
+                { type: "text", text: "正式報價", color: "#71717A", size: "sm", flex: 1 },
+                { type: "text", text: `NTD ${pricing.final_price.toLocaleString()}`, color: "#2563EB", weight: "bold", size: "lg", flex: 2, align: "end" },
               ],
             },
             {
