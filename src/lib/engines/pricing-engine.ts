@@ -41,7 +41,9 @@ export function generateQuote(
     input.commute.commute_fee + input.commute.fuel_fee + input.commute.lodging_fee
   )
 
-  const final_price = labor_after_disc + commute_total
+  const pre_tax_total = labor_after_disc + commute_total
+  const tax_total     = Math.round(pre_tax_total * params.tax_rate)
+  const final_price   = pre_tax_total + tax_total
 
   // ── Line items ────────────────────────────────────────────────────────────
   const line_items: PricingLineItem[] = []
@@ -93,6 +95,13 @@ export function generateQuote(
       subtotal: params.min_order - labor_with_mult,
     })
   }
+  if (tax_total > 0) {
+    line_items.push({
+      code: "TAX",
+      label: `稅金（${(params.tax_rate * 100).toFixed(0)}%）`,
+      subtotal: tax_total,
+    })
+  }
 
   const today = new Date()
   const validUntil = new Date(today)
@@ -106,6 +115,7 @@ export function generateQuote(
     multiplier_breakdown: { floor: m_floor, time_window: m_time, urgent: m_urgent },
     labor_total: labor_after_disc,
     commute_total,
+    tax_total,
     total: final_price,
     final_price,
     currency: "NTD",

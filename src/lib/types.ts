@@ -325,7 +325,8 @@ export interface PricingResult {
   multiplier_breakdown: Record<string, number>
   labor_total: number               // labor after multipliers + min_order + discount
   commute_total: number             // commute_fee + fuel_fee + lodging_fee
-  total: number                     // labor_total + commute_total (= final_price)
+  tax_total: number                 // (labor_total + commute_total) × tax_rate
+  total: number                     // labor + commute + tax (= final_price)
   final_price: number
   currency: string
   quote_code: string

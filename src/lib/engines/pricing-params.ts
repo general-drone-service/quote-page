@@ -25,6 +25,7 @@ export interface PricingParams extends ProductivityParams {
   min_order: number
   quote_max_multiplier: number
   final_discount: number
+  tax_rate: number
 
   commute_origin: CommuteOrigin
   commute: CommuteConfig
@@ -47,7 +48,8 @@ export const PRICING_PARAMS_DEFAULT: PricingParams = {
   urgent_multiplier: 1.33,
   min_order: 30000,
   quote_max_multiplier: 2.5,
-  final_discount: 0.9,
+  final_discount: 1.0,
+  tax_rate: 0.05,
 
   commute_origin: {
     lat: 25.0495732,
