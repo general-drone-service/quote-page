@@ -84,8 +84,69 @@ export function computeDailyArea(
   input: ComputeDailyAreaInput,
   params: ProductivityParams = PRODUCTIVITY_PARAMS_DEFAULT,
 ): DailyAreaResult {
-  void params // for Task 2 implementation
-  void input  // for Task 2 implementation
-  // implemented in Task 2
-  throw new Error("not implemented")
+  const breakdown: { factor: string; coeff: number }[] = []
+  const apply = (factor: string, coeff: number) => {
+    breakdown.push({ factor, coeff })
+    return coeff
+  }
+
+  const buildingCoeff = apply(`buildingType:${input.buildingType}`,
+    params.building_type_coeff[input.buildingType] ?? 1)
+
+  const heightCoeff = apply(`height:${input.floors}F`,
+    params.height_coeff.find(h => input.floors <= h.max_floor)?.coeff ?? 1)
+
+  const cleaningAgentCoeff = apply(`cleaningAgent:${input.cleaningAgent}`,
+    params.cleaning_agent_coeff[input.cleaningAgent] ?? 1)
+
+  const rooftopCoeff = apply(`rooftop:${input.rooftopAccess}`,
+    input.rooftopAccess === "Limited" ? params.facade_modifiers.rooftop_limited :
+    input.rooftopAccess === "NotAvailable" ? params.facade_modifiers.rooftop_unavailable : 1)
+
+  const siteRegion = input.regionExposure
+    ? apply(`region:${input.regionExposure}`, params.site_modifiers.region_exposure[input.regionExposure])
+    : 1
+  const siteCrowd = input.crowdDensity
+    ? apply(`crowd:${input.crowdDensity}`, params.site_modifiers.crowd_density[input.crowdDensity])
+    : 1
+  const siteBase = input.nearBaseStation
+    ? apply("nearBaseStation", params.site_modifiers.near_base_station) : 1
+  const siteWind = input.windChannelEffect
+    ? apply("windChannelEffect", params.site_modifiers.wind_channel_effect) : 1
+
+  // Per-facade coefficient (area-weighted average)
+  const totalArea = input.facadeAreas_m2.reduce((s, a) => s + a, 0)
+  const weightedCoeffSum = input.facadeInputs.reduce((sum, f, i) => {
+    const area = input.facadeAreas_m2[i] ?? 0
+    if (area === 0) return sum
+    const complexityCoeff = params.complexity_coeff[f.complexity] ?? 1
+    const worstDirt = worstDirtType(f.dirtTypes, params.contamination_coeff)
+    const contaminationCoeff = params.contamination_coeff[worstDirt] ?? 1
+    let m = complexityCoeff * contaminationCoeff
+    if (f.hasRecesses)        m *= params.facade_modifiers.has_recesses
+    if (f.isHighRisk)         m *= params.facade_modifiers.is_high_risk
+    if (f.hasAdjacentTrees)   m *= params.facade_modifiers.adjacent_trees
+    if (f.waterSupply === "SelfSupply") m *= params.facade_modifiers.water_self_supply
+    if (f.powerSupply === "SelfSupply") m *= params.facade_modifiers.power_self_supply
+    return sum + area * m
+  }, 0)
+  const avgFacadeCoeff = totalArea > 0 ? weightedCoeffSum / totalArea : 1
+  apply("avgFacadeCoeff", avgFacadeCoeff)
+
+  const dailyArea = params.daily_base_area
+    * buildingCoeff * heightCoeff * cleaningAgentCoeff * rooftopCoeff
+    * siteRegion * siteCrowd * siteBase * siteWind
+    * avgFacadeCoeff
+
+  return { daily_area: dailyArea, breakdown }
+}
+
+function worstDirtType<K extends string>(
+  dirts: readonly K[],
+  coeffs: Record<K, number>,
+): K {
+  // Lower coeff = worse (slower)
+  return dirts.reduce((worst, curr) =>
+    (coeffs[curr] ?? 1) < (coeffs[worst] ?? 1) ? curr : worst
+  , dirts[0])
 }
