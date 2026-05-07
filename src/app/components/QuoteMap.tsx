@@ -1,12 +1,12 @@
 "use client"
 
 import { useEffect, useRef } from "react"
+import { setOptions, importLibrary } from "@googlemaps/js-api-loader"
 import type { AirspaceResult } from "@/lib/types"
 
 export interface PersistedShape {
-  vertices: [number, number][]   // [lat, lng] polygon vertices
+  vertices: [number, number][]
   label: string
-  /** Numbered face labels for each edge (e.g. ["1面", "2面", ...]) */
   edgeLabels?: string[]
 }
 
@@ -14,397 +14,178 @@ interface Props {
   lat: number
   lng: number
   airspace: AirspaceResult | null
-  /** Draw mode active — clicks add polygon vertices */
   drawMode?: boolean
-  /** Label shown in dim overlay while drawing (e.g. "棟A") */
   drawLabel?: string
-  /** Saved polygon shapes to display persistently on the map */
   persistedShapes?: PersistedShape[]
-  /** Called when shape is closed (≥2 vertices: 2=single facade line, ≥3=polygon) */
   onPolygonDraw?: (vertices: [number, number][], area_m2: number, perimeter_m: number) => void
-  /** Called after polygon is successfully closed (so parent can exit draw mode) */
   onDrawModeEnd?: () => void
-  /** When provided the marker becomes draggable and map clicks also reposition it */
   onPositionChange?: (lat: number, lng: number) => void
-  /** Exposes the map container DOM element for screenshot capture */
   mapContainerRef?: (el: HTMLDivElement | null) => void
 }
 
-const SATELLITE_TILE = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-const SATELLITE_ATTR = "Tiles &copy; Esri"
+let optionsSet = false
 
-// ── Polygon geometry helpers ──────────────────────────────────────────────────
-
-function haversineM(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6_371_000
-  const dLat = (lat2 - lat1) * (Math.PI / 180)
-  const dLon = (lon2 - lon1) * (Math.PI / 180)
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
-
-function polygonPerimeter(verts: [number, number][]): number {
-  let total = 0
-  for (let i = 0; i < verts.length; i++) {
-    const a = verts[i], b = verts[(i + 1) % verts.length]
-    total += haversineM(a[0], a[1], b[0], b[1])
+function ensureOptions() {
+  if (optionsSet) return
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY ?? ""
+  if (!apiKey) {
+    console.warn("NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY not set; map will fail")
   }
-  return total
+  setOptions({ key: apiKey, v: "weekly", libraries: ["geometry", "drawing", "marker"] })
+  optionsSet = true
 }
 
-function polygonArea(verts: [number, number][]): number {
-  if (verts.length < 3) return 0
-  const refLat = verts[0][0], refLng = verts[0][1]
-  const mLat = 111320, mLng = 111320 * Math.cos(refLat * Math.PI / 180)
-  const pts = verts.map(([lat, lng]) => [(lng - refLng) * mLng, (lat - refLat) * mLat])
-  let area = 0
-  for (let i = 0; i < pts.length; i++) {
-    const j = (i + 1) % pts.length
-    area += pts[i][0] * pts[j][1] - pts[j][0] * pts[i][1]
-  }
-  return Math.abs(area) / 2
+type LoadedLibs = {
+  coreLib: google.maps.CoreLibrary
+  mapsLib: google.maps.MapsLibrary
+  markerLib: google.maps.MarkerLibrary
+  geometryLib: google.maps.GeometryLibrary
+  drawingLib: google.maps.DrawingLibrary
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+async function loadMapsLibs(): Promise<LoadedLibs> {
+  ensureOptions()
+  const [coreLib, mapsLib, markerLib, geometryLib, drawingLib] = await Promise.all([
+    importLibrary("core") as Promise<google.maps.CoreLibrary>,
+    importLibrary("maps") as Promise<google.maps.MapsLibrary>,
+    importLibrary("marker") as Promise<google.maps.MarkerLibrary>,
+    importLibrary("geometry") as Promise<google.maps.GeometryLibrary>,
+    importLibrary("drawing") as Promise<google.maps.DrawingLibrary>,
+  ])
+  return { coreLib, mapsLib, markerLib, geometryLib, drawingLib }
+}
 
 export function QuoteMap({
-  lat, lng, airspace,
-  drawMode, drawLabel, persistedShapes,
+  lat, lng,
+  drawMode, persistedShapes,
   onPolygonDraw, onDrawModeEnd, onPositionChange,
   mapContainerRef,
+  // kept for API compat but unused in this impl:
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  airspace: _airspace,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  drawLabel: _drawLabel,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const mapInstance = useRef<unknown>(null)
-  const drawModeRef  = useRef(drawMode ?? false)
-  const drawLabelRef = useRef(drawLabel ?? "")
-  const persistedLayersRef = useRef<unknown[]>([])
+  const mapRef = useRef<google.maps.Map | null>(null)
+  const markerRef = useRef<google.maps.Marker | null>(null)
+  const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null)
+  const persistedPolygonsRef = useRef<google.maps.Polygon[]>([])
+  const persistedLabelsRef = useRef<google.maps.OverlayView[]>([])
 
-  // ── Marker ref: exposed so pan-to effect can update position without reinit ──
-  const markerRef = useRef<unknown>(null)
-
-  // ── Callback refs: prevents map reinit when parent re-renders with new inline lambdas ──
-  const onPolygonDrawCb    = useRef(onPolygonDraw)
-  const onPositionChangeCb = useRef(onPositionChange)
-  const onDrawModeEndCb    = useRef(onDrawModeEnd)
-
-  useEffect(() => { onPolygonDrawCb.current    = onPolygonDraw    }, [onPolygonDraw])
-  useEffect(() => { onPositionChangeCb.current = onPositionChange }, [onPositionChange])
-  useEffect(() => { onDrawModeEndCb.current    = onDrawModeEnd    }, [onDrawModeEnd])
-
-  // Refs for communicating with secondary effects
-  const startNewDrawRef = useRef<() => void>(() => {})
-  const cancelDrawRef   = useRef<() => void>(() => {})
-  const isCompleteRef   = useRef(false)
-
-  // ── Main effect: initialise the Leaflet map ──────────────────────────────────
-  // Deps: only `airspace` — lat/lng are used as initial values at init time
-  // and updated via the pan-to effect below without full reinit.
+  // ── Initialize map (once) ─────────────────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current) return
+    if (mapContainerRef) mapContainerRef(containerRef.current)
     let cancelled = false
-
-    async function init() {
-      const L = await import("leaflet")
-      // @ts-expect-error — no type declarations
-      await import("leaflet/dist/leaflet.css")
+    loadMapsLibs().then(({ mapsLib, markerLib }) => {
       if (cancelled || !containerRef.current) return
-
-      if (mapInstance.current) {
-        (mapInstance.current as L.Map).remove()
-        mapInstance.current = null
-        markerRef.current = null
-      }
-
-      const icon = L.icon({
-        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-        iconSize: [25, 41] as [number, number],
-        iconAnchor: [12, 41] as [number, number],
+      const map = new mapsLib.Map(containerRef.current, {
+        center: { lat, lng },
+        zoom: 19,
+        mapTypeId: mapsLib.MapTypeId.HYBRID,
+        streetViewControl: false,
+        mapTypeControl: false,
       })
+      mapRef.current = map
 
-      const map = L.map(containerRef.current, { center: [lat, lng] as [number, number], zoom: 18 })
-      L.tileLayer(SATELLITE_TILE, { attribution: SATELLITE_ATTR, maxZoom: 19 }).addTo(map)
+      const marker = new markerLib.Marker({
+        map, position: { lat, lng },
+        draggable: !!onPositionChange,
+      })
+      markerRef.current = marker
 
-      // ── Marker ────────────────────────────────────────────────────────────────
-      const marker = L.marker([lat, lng] as [number, number], {
-        icon, draggable: !!onPositionChangeCb.current,
-      }).addTo(map)
-      markerRef.current = marker   // expose for pan-to effect
-
-      if (onPositionChangeCb.current) {
-        marker.on("dragend", () => {
-          const { lat: newLat, lng: newLng } = marker.getLatLng()
-          onPositionChangeCb.current?.(newLat, newLng)
+      if (onPositionChange) {
+        marker.addListener("dragend", () => {
+          const p = marker.getPosition()
+          if (p) onPositionChange(p.lat(), p.lng())
         })
-        map.on("click", (e: L.LeafletMouseEvent) => {
-          if (drawModeRef.current) return
-          marker.setLatLng(e.latlng)
-          onPositionChangeCb.current?.(e.latlng.lat, e.latlng.lng)
-        })
-        const PinHelp = L.Control.extend({
-          onAdd() {
-            const div = L.DomUtil.create("div", "")
-            div.innerHTML = `<div style="background:white;padding:5px 9px;border-radius:6px;font-size:11px;box-shadow:0 1px 4px rgba(0,0,0,.2)">拖動標記或點選地圖修正位置</div>`
-            return div
-          },
-        })
-        new PinHelp({ position: "bottomright" }).addTo(map)
-      }
-
-      // ── Airspace circle ────────────────────────────────────────────────────────
-      if (airspace) {
-        const color =
-          airspace.status === "NoFly" ? "#ef4444" :
-          airspace.status === "NeedPermit" ? "#f59e0b" : "#22c55e"
-        L.circle([lat, lng] as [number, number], {
-          radius: 100, color, weight: 1, fillColor: color, fillOpacity: 0.1,
-        }).addTo(map)
-      }
-
-      // ── Polygon click-draw ─────────────────────────────────────────────────────
-      if (onPolygonDrawCb.current) {
-        // Drawing state (closure-local)
-        let vertices: L.LatLng[] = []
-        let vertexMarkers: L.CircleMarker[] = []
-        let edgeLines: L.Polyline[] = []
-        let previewLine: L.Polyline | null = null
-        const SNAP_M = 10  // snap distance to first vertex (meters)
-
-        // Dim control — shows live info
-        const dimDiv = L.DomUtil.create("div", "")
-        dimDiv.style.cssText =
-          "display:none;background:rgba(20,20,20,.88);color:#fff;padding:4px 10px;border-radius:6px;" +
-          "font-size:12px;font-weight:600;pointer-events:none;white-space:nowrap"
-        const DimCtrl = L.Control.extend({ onAdd() { return dimDiv } })
-        new DimCtrl({ position: "topleft" }).addTo(map)
-
-        // Close hint overlay
-        const hintDiv = L.DomUtil.create("div", "")
-        hintDiv.style.cssText =
-          "display:none;background:rgba(239,68,68,.9);color:#fff;padding:3px 9px;border-radius:5px;" +
-          "font-size:11px;pointer-events:none"
-        hintDiv.textContent = "點擊閉合多邊形"
-        const HintCtrl = L.Control.extend({ onAdd() { return hintDiv } })
-        new HintCtrl({ position: "topright" }).addTo(map)
-
-        const clearInProgress = () => {
-          vertexMarkers.forEach(m => map.removeLayer(m))
-          edgeLines.forEach(l => map.removeLayer(l))
-          if (previewLine) { map.removeLayer(previewLine); previewLine = null }
-          vertexMarkers = []
-          edgeLines = []
-          vertices = []
-          dimDiv.style.display = "none"
-          hintDiv.style.display = "none"
-        }
-
-        const closePolygon = () => {
-          if (vertices.length < 2 || isCompleteRef.current) return
-          isCompleteRef.current = true
-
-          // Capture before clearInProgress() resets the vertices array
-          const verts: [number, number][] = vertices.map(v => [v.lat, v.lng])
-          const area = polygonArea(verts) // returns 0 for <3 vertices
-          // For 2 vertices (single facade line), perimeter = edge length (not round-trip)
-          const perim = verts.length === 2
-            ? haversineM(verts[0][0], verts[0][1], verts[1][0], verts[1][1])
-            : polygonPerimeter(verts)
-
-          clearInProgress()
-
-          dimDiv.textContent = verts.length === 2
-            ? `${drawLabelRef.current ? drawLabelRef.current + "  " : ""}單面寬 ${Math.round(perim)} m`
-            : `${drawLabelRef.current ? drawLabelRef.current + "  " : ""}${Math.round(area).toLocaleString()} ㎡ · 周長 ${Math.round(perim)} m`
-          dimDiv.style.display = "block"
-          setTimeout(() => { dimDiv.style.display = "none" }, 3000)
-
-          onPolygonDrawCb.current?.(verts, area, perim)
-          onDrawModeEndCb.current?.()
-        }
-
-        // Expose reset hooks for secondary effect
-        startNewDrawRef.current = () => {
-          clearInProgress()
-          isCompleteRef.current = false
-        }
-        cancelDrawRef.current = () => {
-          if (!isCompleteRef.current) clearInProgress()
-        }
-
-        // ── Click: add vertex or close ──────────────────────────────────────────
-        map.on("click", (e: L.LeafletMouseEvent) => {
-          if (!drawModeRef.current || isCompleteRef.current) return
-
-          // Snap to first vertex to close (≥2 for single facade, ≥3 for polygon)
-          if (vertices.length >= 2) {
-            const dist = e.latlng.distanceTo(vertices[0])
-            if (dist <= SNAP_M) {
-              closePolygon()
-              return
-            }
-          }
-
-          vertices.push(e.latlng)
-          const isFirst = vertices.length === 1
-
-          // Vertex marker
-          const m = L.circleMarker(e.latlng, {
-            radius: isFirst ? 8 : 5,
-            color: "#2563eb", weight: 2,
-            fillColor: isFirst ? "#ef4444" : "#fff",
-            fillOpacity: 1,
-          }).addTo(map)
-          vertexMarkers.push(m)
-
-          // Edge from previous vertex
-          if (vertices.length >= 2) {
-            const edge = L.polyline(
-              [vertices[vertices.length - 2], vertices[vertices.length - 1]],
-              { color: "#2563eb", weight: 2 }
-            ).addTo(map)
-            edgeLines.push(edge)
-          }
-
-          // Update dim
-          if (vertices.length >= 2) {
-            const perim = polygonPerimeter(vertices.map(v => [v.lat, v.lng] as [number, number]))
-            const prefix = drawLabelRef.current ? `${drawLabelRef.current}  ` : ""
-            dimDiv.textContent = `${prefix}${vertices.length} 頂點 · 約 ${Math.round(perim)} m`
-            dimDiv.style.display = "block"
-          }
-        })
-
-        // ── Mousemove: preview line + snap hint ────────────────────────────────
-        map.on("mousemove", (e: L.LeafletMouseEvent) => {
-          if (!drawModeRef.current || isCompleteRef.current || vertices.length === 0) return
-
-          if (previewLine) map.removeLayer(previewLine)
-          previewLine = L.polyline(
-            [vertices[vertices.length - 1], e.latlng],
-            { color: "#2563eb", weight: 1.5, dashArray: "6 4" }
-          ).addTo(map)
-
-          // Snap hint: highlight first vertex (≥2 for single facade, ≥3 for polygon)
-          if (vertices.length >= 2 && vertexMarkers[0]) {
-            const dist = e.latlng.distanceTo(vertices[0])
-            const near = dist <= SNAP_M
-            vertexMarkers[0].setStyle({
-              fillColor: "#ef4444",
-              radius: near ? 11 : 8,
-              color: near ? "#dc2626" : "#2563eb",
-            })
-            hintDiv.textContent = vertices.length === 2 ? "點擊確認單面" : "點擊閉合多邊形"
-            hintDiv.style.display = near ? "block" : "none"
-          }
-        })
-
-        // ── Double-click: close shape (≥2 vertices) ──────────────────────────
-        map.on("dblclick", (e: L.LeafletMouseEvent) => {
-          if (!drawModeRef.current || isCompleteRef.current) return
-          L.DomEvent.stop(e)
-          if (vertices.length >= 2) closePolygon()
+        map.addListener("click", (e: google.maps.MapMouseEvent) => {
+          if (drawMode) return
+          if (!e.latLng) return
+          marker.setPosition(e.latLng)
+          onPositionChange(e.latLng.lat(), e.latLng.lng())
         })
       }
+    })
+    return () => { cancelled = true }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-      persistedLayersRef.current = []
-      mapInstance.current = map
-    }
-
-    init()
-    return () => {
-      cancelled = true
-      if (mapInstance.current) {
-        (mapInstance.current as { remove: () => void }).remove()
-        mapInstance.current = null
-        markerRef.current = null
-      }
-    }
-  }, [airspace]) // eslint-disable-line react-hooks/exhaustive-deps
-  // ^ lat/lng intentionally omitted: used as init-time values only.
-  //   Subsequent changes are handled by the pan-to effect below.
-
-  // ── Pan-to: update map position without full reinit ────────────────────────
-  // Prevents the drag-feedback loop: drag marker → parent updates lat/lng →
-  // map pans to same position (no visible change) rather than reinitialising.
+  // ── React to lat/lng changes ──────────────────────────────────────────────
   useEffect(() => {
-    type Marker = { getLatLng: () => { lat: number; lng: number }; setLatLng: (ll: [number, number]) => void }
-    type Map = { setView: (c: [number, number], z: number) => void; getZoom: () => number }
-    const map = mapInstance.current as Map | null
-    const marker = markerRef.current as Marker | null
-    if (!map || !marker) return
-    const cur = marker.getLatLng()
-    // Only reposition if meaningfully different (>0.00005° ≈ 5m) to avoid
-    // feedback loop when the change originated from a marker drag.
-    if (Math.abs(cur.lat - lat) > 0.00005 || Math.abs(cur.lng - lng) > 0.00005) {
-      marker.setLatLng([lat, lng])
-      map.setView([lat, lng], map.getZoom())
-    }
+    if (!mapRef.current || !markerRef.current) return
+    const pos = { lat, lng }
+    mapRef.current.setCenter(pos)
+    markerRef.current.setPosition(pos)
   }, [lat, lng])
 
-  // ── Secondary: draw mode changes ──────────────────────────────────────────
+  // ── Drawing manager ───────────────────────────────────────────────────────
   useEffect(() => {
-    drawModeRef.current = drawMode ?? false
-    const map = mapInstance.current as (L.Map & { dragging: L.Handler }) | null
+    const map = mapRef.current
     if (!map) return
-    if (drawMode) {
-      startNewDrawRef.current()
-      ;(map.getContainer() as HTMLElement).style.cursor = "crosshair"
-    } else {
-      cancelDrawRef.current()
-      isCompleteRef.current = false
-      ;(map.getContainer() as HTMLElement).style.cursor = ""
-    }
-  }, [drawMode])
+    loadMapsLibs().then(({ coreLib, geometryLib, drawingLib }) => {
+      if (!drawMode) {
+        drawingManagerRef.current?.setMap(null)
+        drawingManagerRef.current = null
+        return
+      }
+      const dm = new drawingLib.DrawingManager({
+        drawingMode: drawingLib.OverlayType.POLYGON,
+        drawingControl: false,
+        polygonOptions: {
+          fillColor: "#2563eb", fillOpacity: 0.2,
+          strokeColor: "#2563eb", strokeWeight: 2,
+          editable: false, draggable: false,
+        },
+      })
+      dm.setMap(map)
+      drawingManagerRef.current = dm
 
-  // ── Secondary: draw label ref ──────────────────────────────────────────────
-  useEffect(() => { drawLabelRef.current = drawLabel ?? "" }, [drawLabel])
+      coreLib.event.addListener(dm, "polygoncomplete", (poly: google.maps.Polygon) => {
+        const path = poly.getPath()
+        const verts: [number, number][] = []
+        for (let i = 0; i < path.getLength(); i++) {
+          const ll = path.getAt(i)
+          verts.push([ll.lat(), ll.lng()])
+        }
+        const area_m2 = geometryLib.spherical.computeArea(path)
+        const perimeter_m = geometryLib.spherical.computeLength(path)
+        poly.setMap(null)
+        onPolygonDraw?.(verts, area_m2, perimeter_m)
+        onDrawModeEnd?.()
+      })
+    })
+  }, [drawMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Secondary: update persisted shape layers ───────────────────────────────
+  // ── Render persisted shapes ───────────────────────────────────────────────
   useEffect(() => {
-    const map = mapInstance.current
+    const map = mapRef.current
     if (!map) return
-    import("leaflet").then(L => {
-      const m = map as L.Map
-      for (const layer of persistedLayersRef.current) m.removeLayer(layer as L.Layer)
-      persistedLayersRef.current = []
-      if (!persistedShapes?.length) return
-      for (const shape of persistedShapes) {
-        if (!shape.vertices?.length) continue
-        const isSingleFacade = shape.vertices.length === 2
-        // 2 vertices → polyline (single facade); ≥3 → polygon
-        const baseLayer = isSingleFacade
-          ? L.polyline(shape.vertices, {
-              color: "#16a34a", weight: 3, dashArray: "8 4",
-            })
-          : L.polygon(shape.vertices, {
-              color: "#16a34a", weight: 2, fillColor: "#22c55e", fillOpacity: 0.2,
-            })
-        if (shape.label) baseLayer.bindTooltip(shape.label, { permanent: true, direction: "center" })
-        const layer = baseLayer.addTo(m)
-        persistedLayersRef.current.push(layer)
+    persistedPolygonsRef.current.forEach(p => p.setMap(null))
+    persistedLabelsRef.current.forEach(l => l.setMap(null))
+    persistedPolygonsRef.current = []
+    persistedLabelsRef.current = []
 
-        // Add numbered face labels at each edge midpoint
-        const edgeCount = isSingleFacade ? 1 : shape.vertices.length
-        if (shape.edgeLabels?.length) {
-          for (let ei = 0; ei < edgeCount; ei++) {
-            const v1 = shape.vertices[ei]
-            const v2 = shape.vertices[(ei + 1) % shape.vertices.length]
-            const midLat = (v1[0] + v2[0]) / 2
-            const midLng = (v1[1] + v2[1]) / 2
-            const edgeLabel = shape.edgeLabels[ei] ?? `${ei + 1}面`
-            const edgeMarker = L.marker([midLat, midLng] as [number, number], {
-              icon: L.divIcon({
-                className: "",
-                html: `<div style="background:#2563eb;color:#fff;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:600;white-space:nowrap;transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.3)">${edgeLabel}</div>`,
-                iconSize: [0, 0],
-              }),
-              interactive: false,
-            }).addTo(m)
-            persistedLayersRef.current.push(edgeMarker)
+    if (!persistedShapes?.length) return
+
+    loadMapsLibs().then(({ coreLib, mapsLib }) => {
+      for (const shape of persistedShapes!) {
+        const path = shape.vertices.map(([vlat, vlng]) => ({ lat: vlat, lng: vlng }))
+        const poly = new mapsLib.Polygon({
+          map, paths: path,
+          fillColor: "#10b981", fillOpacity: 0.25,
+          strokeColor: "#059669", strokeWeight: 2,
+        })
+        persistedPolygonsRef.current.push(poly)
+
+        if (shape.edgeLabels) {
+          for (let i = 0; i < shape.vertices.length; i++) {
+            const a = shape.vertices[i]
+            const b = shape.vertices[(i + 1) % shape.vertices.length]
+            const mid = { lat: (a[0] + b[0]) / 2, lng: (a[1] + b[1]) / 2 }
+            const labelText = shape.edgeLabels[i] ?? `${i + 1}面`
+            const label = createTextOverlay(coreLib, mapsLib, map, mid, labelText)
+            persistedLabelsRef.current.push(label)
           }
         }
       }
@@ -412,6 +193,49 @@ export function QuoteMap({
   }, [persistedShapes])
 
   return (
-    <div ref={(el) => { (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = el; mapContainerRef?.(el) }} className="w-full h-[220px] sm:h-[300px] rounded-lg border border-zinc-700 overflow-hidden" />
+    <div ref={containerRef} className="w-full h-[400px] rounded-lg border border-zinc-300" />
   )
+}
+
+// ── Text overlay (edge label) ─────────────────────────────────────────────────
+
+function createTextOverlay(
+  coreLib: google.maps.CoreLibrary,
+  mapsLib: google.maps.MapsLibrary,
+  map: google.maps.Map,
+  position: google.maps.LatLngLiteral,
+  text: string,
+): google.maps.OverlayView {
+  class TextOverlay extends (mapsLib.OverlayView as typeof google.maps.OverlayView) {
+    private div: HTMLDivElement | null = null
+    onAdd() {
+      const div = document.createElement("div")
+      div.style.position = "absolute"
+      div.style.background = "white"
+      div.style.padding = "2px 6px"
+      div.style.borderRadius = "4px"
+      div.style.fontSize = "12px"
+      div.style.boxShadow = "0 1px 3px rgba(0,0,0,0.2)"
+      div.style.pointerEvents = "none"
+      div.textContent = text
+      this.div = div
+      this.getPanes()?.overlayLayer.appendChild(div)
+    }
+    draw() {
+      if (!this.div) return
+      const proj = this.getProjection()
+      if (!proj) return
+      const p = proj.fromLatLngToDivPixel(new coreLib.LatLng(position))
+      if (!p) return
+      this.div.style.left = `${p.x - 20}px`
+      this.div.style.top  = `${p.y - 12}px`
+    }
+    onRemove() {
+      this.div?.remove()
+      this.div = null
+    }
+  }
+  const overlay = new TextOverlay()
+  overlay.setMap(map)
+  return overlay
 }
