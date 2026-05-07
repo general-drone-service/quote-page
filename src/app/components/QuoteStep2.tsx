@@ -2,10 +2,10 @@
 
 import { useEffect, useState, useCallback, useRef } from "react"
 import type { RooftopAccess } from "@/lib/types"
-import type { QuoteFormData, AreaEstimate, QuoteFacadeInput, BuildingDimensions, CleaningAgent } from "./quote-defaults"
+import type { QuoteFormData, AreaEstimate, QuoteFacadeInput, CleaningAgent } from "./quote-defaults"
 import {
   BUILDING_TYPE_OPTIONS, TIME_SLOT_OPTIONS, CLEANING_AGENT_OPTIONS,
-  estimateFromPerimeter, estimateFromDefaults, estimateFromDimensions,
+  estimateFromPerimeter, estimateFromDefaults,
   estimateFromMultiPerimeters,
   buildDefaultFacadeInputs,
 } from "./quote-defaults"
@@ -18,9 +18,6 @@ import { CLEANING_AGENT_EXAMPLES } from "./example-popover-data"
 interface Props {
   formData: Partial<QuoteFormData>
   updateForm: (patch: Partial<QuoteFormData>) => void
-  buildingPerimeter: number | null
-  buildingPolygon: { lat: number; lon: number }[] | null
-  buildingDimensions: BuildingDimensions | null
   areaEstimate: AreaEstimate | null
   setAreaEstimate: (a: AreaEstimate) => void
   onNext: () => void
@@ -45,8 +42,8 @@ const SOURCE_LABELS: Record<string, string> = {
 const BUILDING_LABELS = ["A", "B", "C", "D", "E", "F"]
 
 export function QuoteStep2({
-  formData, updateForm, buildingPerimeter, buildingPolygon,
-  buildingDimensions, areaEstimate, setAreaEstimate, onNext, onBack,
+  formData, updateForm,
+  areaEstimate, setAreaEstimate, onNext, onBack,
   mapContainerRef,
 }: Props) {
   const floors = formData.floors ?? 10
@@ -71,7 +68,6 @@ export function QuoteStep2({
     const poly = drawnPolygons[b]
     if (poly && poly.vertices.length === 2) return 1
     if (poly && poly.vertices.length >= 3) return poly.vertices.length
-    if (b === 0 && buildingPolygon && buildingPolygon.length >= 3) return buildingPolygon.length
     return numFacades
   })
 
@@ -83,10 +79,7 @@ export function QuoteStep2({
       updateForm({ numFacades: 1 })
     } else if (drawnPoly && drawnPoly.vertices.length >= 3) {
       updateForm({ numFacades: drawnPoly.vertices.length })
-    } else if (buildingPolygon && buildingPolygon.length >= 3) {
-      updateForm({ numFacades: buildingPolygon.length })
     }
-    // Update per-building face counts
     if (numBuildings > 1) {
       const counts = Array.from({ length: numBuildings }, (_, b) => {
         const poly = drawnPolygons[b]
@@ -96,7 +89,7 @@ export function QuoteStep2({
       })
       updateForm({ numFacadesPerBuilding: counts })
     }
-  }, [drawnPolygons, buildingPolygon, numBuildings]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [drawnPolygons, numBuildings]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep facade inputs in sync with per-building face counts
   useEffect(() => {
@@ -132,14 +125,10 @@ export function QuoteStep2({
     } else if (overrideWidth && Number(overrideWidth) > 0) {
       const w = Number(overrideWidth)
       setAreaEstimate(estimateFromPerimeter(w * numFacades, floors, numFacades, "manual-draw", ho))
-    } else if (buildingDimensions && buildingDimensions.width_m > 0) {
-      setAreaEstimate(estimateFromDimensions(buildingDimensions, floors, numFacades, ho))
-    } else if (buildingPerimeter && buildingPerimeter > 0) {
-      setAreaEstimate(estimateFromPerimeter(buildingPerimeter, floors, numFacades, "overpass", ho))
     } else {
       setAreaEstimate(estimateFromDefaults(buildingType, floors, numFacades, ho))
     }
-  }, [floors, heightMode, effectiveHeight, numFacades, numBuildings, buildingType, buildingPerimeter, buildingDimensions, overrideWidth, drawnPolygons, setAreaEstimate]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [floors, heightMode, effectiveHeight, numFacades, numBuildings, buildingType, overrideWidth, drawnPolygons, setAreaEstimate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Stable callback — uses ref to avoid map re-init when drawTarget changes
   const handlePolygonDraw = useCallback((
@@ -543,14 +532,6 @@ export function QuoteStep2({
                 </span>
               </div>
               <div className="space-y-1 text-sm text-blue-800">
-                {buildingDimensions && buildingDimensions.width_m > 0 && !drawnPolygons.some(p => p != null) && (
-                  <p className="font-medium">
-                    建物尺寸：{buildingDimensions.width_m} × {buildingDimensions.depth_m} m
-                    <span className="text-xs font-normal ml-1 opacity-70">
-                      （方位 {buildingDimensions.angle_deg}°）
-                    </span>
-                  </p>
-                )}
                 {areaEstimate.perBuildingTotals_m2 && areaEstimate.perBuildingTotals_m2.length > 1 ? (
                   <>
                     <p>建物高度 = {heightMode === "height" ? `${areaEstimate.building_height_m}m` : `${floors}F × 3.5m = ${areaEstimate.building_height_m}m`}</p>
