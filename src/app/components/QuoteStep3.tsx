@@ -1,16 +1,14 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
-import type { AirspaceResult, PricingResult, TimeResult, Contamination, FacadeData } from "@/lib/types"
-import { generateQuote } from "@/lib/engines/pricing-engine"
+import { useEffect, useMemo } from "react"
+import type { AirspaceResult, PricingResult, TimeResult } from "@/lib/types"
+import { computeDailyArea } from "@/lib/engines/productivity-engine"
 import { estimateTime } from "@/lib/engines/time-engine"
+import { generateQuote } from "@/lib/engines/pricing-engine"
+import { estimateCommute } from "@/lib/engines/commute-engine"
+import { getPricingParams } from "@/lib/engines/pricing-params"
 import type { QuoteFormData, AreaEstimate } from "./quote-defaults"
-import {
-  buildFacadesFromInputs, buildFacades,
-  allContaminationTypes, aggregateSupply,
-  mapServiceToMissionType, mapTimeSlot,
-  getWeatherRisk,
-} from "./quote-defaults"
+import { getWeatherRisk } from "./quote-defaults"
 import { LineQuoteCta } from "./LineQuoteCta"
 
 interface Props {
@@ -50,69 +48,83 @@ export function QuoteStep3({
   onBack, onReset,
 }: Props) {
   useEffect(() => {
-    const hasPerFacade = formData.facadeInputs && formData.facadeInputs.length > 0
-    const facades = hasPerFacade
-      ? buildFacadesFromInputs(formData.facadeInputs!, areaEstimate, formData.buildingType)
-      : buildFacades(areaEstimate, formData.buildingType)
+    let cancelled = false
+    ;(async () => {
+      const facades = formData.facadeInputs ?? []
+      const totalArea = areaEstimate.project_total_m2
+        ?? (areaEstimate.total_area_m2 * (formData.numBuildings ?? 1))
+      // Approximate per-facade areas: each gets equal share of total
+      const facadeAreas_m2 = facades.length > 0
+        ? facades.map(() => totalArea / facades.length)
+        : []
 
-    const contamination = hasPerFacade
-      ? allContaminationTypes(formData.facadeInputs!)
-      : (["dust"] as Contamination[])
+      const params = getPricingParams()
 
-    const timeWindow = mapTimeSlot(formData.timeSlot)
-    const waterSupply = hasPerFacade ? aggregateSupply(formData.facadeInputs!, "water") : "Provided"
-    const powerSupply = hasPerFacade ? aggregateSupply(formData.facadeInputs!, "power") : "Provided"
-    const rooftopAccess = formData.rooftopAccess ?? "Good"
-    const cleaningAgent = formData.cleaningAgent ?? "standard"
+      const effectiveFloors = formData.heightMode === "height" && formData.heightM
+        ? Math.ceil(formData.heightM / 3.5)
+        : formData.floors
 
-    // When using direct height mode, derive equivalent floors for multiplier lookups
-    const effectiveFloors = formData.heightMode === "height" && formData.heightM
-      ? Math.ceil(formData.heightM / 3.5)
-      : formData.floors
+      // 1. Daily area
+      const { daily_area } = computeDailyArea({
+        buildingType: formData.buildingType,
+        floors: effectiveFloors,
+        facadeInputs: facades,
+        facadeAreas_m2,
+        rooftopAccess: formData.rooftopAccess ?? "Good",
+        cleaningAgent: formData.cleaningAgent ?? "standard",
+        regionExposure: formData.regionExposure,
+        crowdDensity: formData.crowdDensity,
+        nearBaseStation: formData.nearBaseStation,
+        windChannelEffect: formData.windChannelEffect,
+      }, params)
 
-    setPricing(generateQuote({
-      buildingType: formData.buildingType,
-      floors: effectiveFloors,
-      facades,
-      contamination,
-      cleaningAgent,
-      timeWindow,
-      waterSupply,
-      powerSupply,
-      rooftopAccess,
-      urgent: formData.urgent,
-    }))
+      // 2. Work days
+      const time = estimateTime({ total_area: totalArea, daily_area })
+      if (cancelled) return
+      setTimeResult(time)
 
-    setTimeResult(estimateTime({
-      missionType: mapServiceToMissionType(formData.serviceType),
-      buildingType: formData.buildingType,
-      floors: effectiveFloors,
-      wind_ms: 4,
-      facades,
-      contamination,
-      timeWindow,
-      riskLevel: "R0",
-      waterSupply,
-      powerSupply,
-      rooftopAccess,
-    }))
+      // 3. Commute (async)
+      const commute = await estimateCommute(formData.lat, formData.lng, time.suggested_days)
+      if (cancelled) return
+
+      // 4. Final price
+      const facadeAreaItems = facades.length > 0
+        ? facades.map((f, i) => ({
+            label: f.buildingLabel ? `${f.buildingLabel}棟-${f.label}` : f.label,
+            area_m2: Math.round(facadeAreas_m2[i] ?? 0),
+          }))
+        : []
+
+      const quote = generateQuote({
+        suggested_days: time.suggested_days,
+        multipliers: {
+          floors: effectiveFloors,
+          timeWindow: (formData.timeSlot ?? "day") as "day" | "weekend" | "night",
+          urgent: formData.urgent ?? false,
+        },
+        commute,
+        facadeAreas: facadeAreaItems,
+        daily_area,
+      }, params)
+      if (cancelled) return
+      setPricing(quote)
+    })()
+    return () => { cancelled = true }
   }, [formData, areaEstimate, setPricing, setTimeResult])
 
-  // Compute per-facade geometry for display (width, height, area)
-  const facadeGeometry = useMemo(() => {
-    const hasPerFacade = formData.facadeInputs && formData.facadeInputs.length > 0
-    const facades: FacadeData[] = hasPerFacade
-      ? buildFacadesFromInputs(formData.facadeInputs!, areaEstimate, formData.buildingType)
-      : buildFacades(areaEstimate, formData.buildingType)
-    const height = areaEstimate.building_height_m
-    return facades.map((f) => ({
-      id: f.id,
-      label: f.label,
-      height_m: height,
-      width_m: height > 0 ? Math.round((f.area_m2 / height) * 10) / 10 : 0,
-      area_m2: f.area_m2,
-    }))
-  }, [formData, areaEstimate])
+  // Map from FACE-<label> line items back to area_m2 for the facade table
+  const facadeAreaByLabel = useMemo(() => {
+    const map = new Map<string, number>()
+    if (!pricing) return map
+    for (const item of pricing.line_items) {
+      if (item.code.startsWith("FACE-") && item.area_m2 != null) {
+        map.set(item.code.slice("FACE-".length), item.area_m2)
+      }
+    }
+    return map
+  }, [pricing])
+
+  const heightForDisplay = areaEstimate.building_height_m
 
   if (!pricing || !timeResult) {
     return <div className="text-center py-12 text-zinc-500">計算中...</div>
@@ -204,21 +216,17 @@ export function QuoteStep3({
                   </tr>
                 </thead>
                 <tbody>
-                  {formData.facadeInputs.map((f, idx) => {
-                    const geo = facadeGeometry[idx]
+                  {formData.facadeInputs.map((f) => {
+                    const labelKey = f.buildingLabel ? `${f.buildingLabel}棟-${f.label}` : f.label
+                    const area = facadeAreaByLabel.get(labelKey) ?? 0
+                    const width = heightForDisplay > 0 ? Math.round((area / heightForDisplay) * 10) / 10 : 0
                     return (
                       <tr key={f.id} className="border-b border-zinc-100">
-                        <td className="py-2 font-semibold text-zinc-800">
-                          {f.buildingLabel ? `${f.buildingLabel}棟-${f.label}` : f.label}
-                        </td>
-                        <td className="text-right py-2 text-zinc-600">
-                          {geo ? `${geo.height_m}m` : "—"}
-                        </td>
-                        <td className="text-right py-2 text-zinc-600">
-                          {geo ? `${geo.width_m}m` : "—"}
-                        </td>
+                        <td className="py-2 font-semibold text-zinc-800">{labelKey}</td>
+                        <td className="text-right py-2 text-zinc-600">{heightForDisplay}m</td>
+                        <td className="text-right py-2 text-zinc-600">{width}m</td>
                         <td className="text-right py-2 text-zinc-700 font-medium">
-                          {geo ? `${geo.area_m2.toLocaleString()} ㎡` : "—"}
+                          {area.toLocaleString()} ㎡
                         </td>
                         <td className="py-2 pl-3 text-zinc-500">
                           <div className="flex flex-wrap gap-1">
@@ -333,6 +341,13 @@ export function QuoteStep3({
           </div>
         </div>
 
+        {/* Commute warning banner */}
+        {pricing.commute?.warning && (
+          <div className="mx-6 mb-4 px-4 py-3 rounded-lg border bg-amber-50 border-amber-200 text-amber-800 text-sm">
+            ⚠️ 通勤費為估算值（{pricing.commute.warning}）— 實際以現勘為準
+          </div>
+        )}
+
         {/* Disclaimer */}
         <div className="px-6 py-3 bg-amber-50 border-t border-amber-200 text-sm text-amber-800">
           ⚠️ 本報價為快速估算，正式報價需現場勘查確認。
@@ -421,4 +436,3 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     </div>
   )
 }
-
