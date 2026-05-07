@@ -302,21 +302,40 @@ export interface PricingLineItem {
   subtotal: number
 }
 
+// ─── Commute / Lodging ────────────────────────────────────────────────────────
+
+export type CommuteMode = "daily" | "lodging"
+
+export interface CommuteResult {
+  mode: CommuteMode
+  one_way_hours: number
+  commute_fee: number
+  fuel_fee: number
+  lodging_fee: number
+  origin_address: string
+  destination_address: string
+  cached_at?: string
+  warning?: string
+}
+
 export interface PricingResult {
   line_items: PricingLineItem[]
-  subtotal: number
+  subtotal: number                  // labor before multipliers
   multiplier: number
   multiplier_breakdown: Record<string, number>
-  total: number
-  final_discount: number
+  labor_total: number               // labor after multipliers + min_order + discount
+  commute_total: number             // commute_fee + fuel_fee + lodging_fee
+  total: number                     // labor_total + commute_total (= final_price)
   final_price: number
   currency: string
   quote_code: string
   valid_until: string
   pricing_version: string
-  // v2.0: multiplier cap protection
   requires_manual_review?: boolean
   manual_review_note?: string
+  commute?: CommuteResult
+  suggested_days?: number
+  daily_area?: number
 }
 
 // ─── Equipment (used by risk engine for E-score computation) ─────────────────
