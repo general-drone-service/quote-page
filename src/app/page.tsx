@@ -52,18 +52,10 @@ export default function QuotePage() {
 
   const saveDraft = useCallback(async (nextStep: number) => {
     try {
-      let mapScreenshotBase64: string | null = null
-
-      // Capture map screenshot if map container exists
-      if (mapContainerRef.current) {
-        try {
-          const { toPng } = await import("html-to-image")
-          const dataUrl = await toPng(mapContainerRef.current, { cacheBust: true, quality: 0.8 })
-          mapScreenshotBase64 = dataUrl.replace(/^data:image\/png;base64,/, "")
-        } catch {
-          // Screenshot capture can fail on cross-origin tiles; non-critical
-        }
-      }
+      // Map screenshot capture removed: html-to-image cannot read cssRules
+      // from Google Maps' cross-origin stylesheets, which surfaces as a
+      // SecurityError. Drafts now save without the screenshot column.
+      const mapScreenshotBase64: string | null = null
 
       await fetch("/api/quote/save-draft", {
         method: "POST",

@@ -20,10 +20,10 @@ describe("computeDailyArea — baseline", () => {
       facadeAreas_m2: [100],
       rooftopAccess: "Good", cleaningAgent: "standard",
     })
-    // 1500 × 1.0(commercial) × 1.0(<10F) × 0.95(standard agent) × 1.0(rooftop good)
+    // 1000 × 1.0(commercial) × 1.0(<10F) × 0.95(standard agent) × 1.0(rooftop good)
     //      × 1.0(no site mods) × (0.98 × 1.0)(light × dust)
-    // = 1500 × 0.95 × 0.98 = 1396.5
-    expect(result.daily_area).toBeCloseTo(1396.5, 1)
+    // = 1000 × 0.95 × 0.98 = 931
+    expect(result.daily_area).toBeCloseTo(931, 1)
   })
 })
 
@@ -36,8 +36,8 @@ describe("computeDailyArea — area-weighted aggregation", () => {
       facadeAreas_m2: [100, 300],
       rooftopAccess: "Good", cleaningAgent: "standard",
     })
-    // 1500 × 1.0 × 1.0 × 0.95 × 1.0 × 0.77 = 1097.25
-    expect(result.daily_area).toBeCloseTo(1097.25, 1)
+    // 1000 × 1.0 × 1.0 × 0.95 × 1.0 × 0.77 = 731.5
+    expect(result.daily_area).toBeCloseTo(731.5, 1)
   })
 })
 
@@ -49,8 +49,8 @@ describe("computeDailyArea — modifiers", () => {
       facadeAreas_m2: [100],
       rooftopAccess: "NotAvailable", cleaningAgent: "standard",
     })
-    // 1500 × 1.0 × 1.0 × 0.95 × 0.6 × 0.98 = 837.9
-    expect(result.daily_area).toBeCloseTo(837.9, 1)
+    // 1000 × 1.0 × 1.0 × 0.95 × 0.6 × 0.98 = 558.6
+    expect(result.daily_area).toBeCloseTo(558.6, 1)
   })
 
   it("LARM site fields stack multiplicatively", () => {
@@ -62,9 +62,9 @@ describe("computeDailyArea — modifiers", () => {
       regionExposure: "windward", crowdDensity: "high",
       nearBaseStation: true, windChannelEffect: true,
     })
-    // 1500 × 1.0(commercial) × 1.0(<10F) × 0.95(standard) × 1.0(good rooftop)
+    // 1000 × 1.0(commercial) × 1.0(<10F) × 0.95(standard) × 1.0(good rooftop)
     //      × 0.85(windward) × 0.85(high crowd) × 0.95(near base) × 0.85(wind channel)
-    //      × 0.98(light × dust) = 814.7
-    expect(result.daily_area).toBeCloseTo(814.7, 0)
+    //      × 0.98(light × dust) ≈ 543.2
+    expect(result.daily_area).toBeCloseTo(543.2, 0)
   })
 })

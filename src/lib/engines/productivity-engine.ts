@@ -30,7 +30,7 @@ export interface ProductivityParams {
 }
 
 export const PRODUCTIVITY_PARAMS_DEFAULT: ProductivityParams = {
-  daily_base_area: 1500,
+  daily_base_area: 1000,
   building_type_coeff: {
     commercial: 1.0, luxury: 1.0, house: 0.85, factory: 1.1, solar: 1.3,
   },

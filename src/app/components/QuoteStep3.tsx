@@ -83,11 +83,15 @@ export function QuoteStep3({
       if (cancelled) return
       setTimeResult(time)
 
-      // 3. Commute (async)
-      const commute = await estimateCommute(formData.lat, formData.lng, time.suggested_days)
+      // 3. Weather buffer days fold into the chargeable workday count
+      const weatherBuffer = getWeatherRisk(formData.expectedDate).bufferDays
+      const totalChargeableDays = time.suggested_days + weatherBuffer
+
+      // 4. Commute (uses chargeable days for fee×days math)
+      const commute = await estimateCommute(formData.lat, formData.lng, totalChargeableDays)
       if (cancelled) return
 
-      // 4. Final price
+      // 5. Final price
       const facadeAreaItems = facades.length > 0
         ? facades.map((f, i) => ({
             label: f.buildingLabel ? `${f.buildingLabel}棟-${f.label}` : f.label,
@@ -96,7 +100,7 @@ export function QuoteStep3({
         : []
 
       const quote = generateQuote({
-        suggested_days: time.suggested_days,
+        suggested_days: totalChargeableDays,
         multipliers: {
           floors: effectiveFloors,
           timeWindow: (formData.timeSlot ?? "day") as "day" | "weekend" | "night",
@@ -134,9 +138,14 @@ export function QuoteStep3({
   // project_total_m2 is set when buildings have different sizes; otherwise multiply
   const totalArea = areaEstimate.project_total_m2 ?? (areaEstimate.total_area_m2 * numBuildings)
 
-  // Separate line items by type
-  const faceItems = pricing.line_items.filter(item => item.code.startsWith("FACE-"))
-  const extraItems = pricing.line_items.filter(item => !item.code.startsWith("FACE-"))
+  // Separate line items by type. Per business rule, three categories are
+  // hidden from the customer-facing 費用明細 table even though their amounts
+  // are still rolled into the total: FACE-* (per-facade rows), FUEL, COMMUTE.
+  const HIDDEN_CODES = new Set(["FUEL", "COMMUTE"])
+  const faceItems: typeof pricing.line_items = []  // intentionally empty (hidden)
+  const extraItems = pricing.line_items.filter(item =>
+    !item.code.startsWith("FACE-") && !HIDDEN_CODES.has(item.code)
+  )
 
   return (
     <div className="space-y-6">
@@ -336,7 +345,7 @@ export function QuoteStep3({
             </div>
             <div className="text-right">
               <p className="text-blue-200 text-sm">預估工期</p>
-              <p className="text-2xl font-bold">{timeResult.suggested_days} 天</p>
+              <p className="text-2xl font-bold">{pricing.suggested_days ?? timeResult.suggested_days} 天</p>
             </div>
           </div>
         </div>
