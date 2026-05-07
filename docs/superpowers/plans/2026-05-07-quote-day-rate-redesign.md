@@ -407,8 +407,8 @@ describe("computeDailyArea — modifiers", () => {
       regionExposure: "windward", crowdDensity: "high",
       nearBaseStation: true, windChannelEffect: true,
     })
-    // 1500 × 1.0 × 1.0 × 0.95 × 1.0 × 0.85 × 0.85 × 0.95 × 0.85 × 0.98 ≈ 859.1
-    expect(result.daily_area).toBeCloseTo(859.1, 0)
+    // 1500 × 1.0 × 1.0 × 0.95 × 1.0 × 0.85 × 0.85 × 0.95 × 0.85 × 0.98 ≈ 814.7
+    expect(result.daily_area).toBeCloseTo(814.7, 0)
   })
 })
 ```

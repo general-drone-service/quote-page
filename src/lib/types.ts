@@ -285,18 +285,11 @@ export interface RiskResult {
 // ─── Time Estimation ─────────────────────────────────────────────────────────
 
 export interface TimeResult {
-  baseline_productivity: number
-  adjusted_productivity: number
-  pure_operation_hours: number
-  setup_minutes: number
-  teardown_minutes: number
-  rest_minutes: number
-  buffer_minutes: number
-  total_minutes: number
-  suggested_days: number
-  disruption_buffer_ratio: number
+  pure_operation_days: number   // exact, unrounded
+  suggested_days: number        // ceil(pure_operation_days), min 1
+  total_area: number
+  daily_area: number
   time_model_version: string
-  coefficient_snapshot: Record<string, number>
 }
 
 // ─── Pricing ─────────────────────────────────────────────────────────────────
@@ -309,21 +302,41 @@ export interface PricingLineItem {
   subtotal: number
 }
 
+// ─── Commute / Lodging ────────────────────────────────────────────────────────
+
+export type CommuteMode = "daily" | "lodging"
+
+export interface CommuteResult {
+  mode: CommuteMode
+  one_way_hours: number
+  commute_fee: number
+  fuel_fee: number
+  lodging_fee: number
+  origin_address: string
+  destination_address: string
+  cached_at?: string
+  warning?: string
+}
+
 export interface PricingResult {
   line_items: PricingLineItem[]
-  subtotal: number
+  subtotal: number                  // labor before multipliers
   multiplier: number
   multiplier_breakdown: Record<string, number>
-  total: number
-  final_discount: number
+  labor_total: number               // labor after multipliers + min_order + discount
+  commute_total: number             // commute_fee + fuel_fee + lodging_fee
+  tax_total: number                 // (labor_total + commute_total) × tax_rate
+  total: number                     // labor + commute + tax (= final_price)
   final_price: number
   currency: string
   quote_code: string
   valid_until: string
   pricing_version: string
-  // v2.0: multiplier cap protection
   requires_manual_review?: boolean
   manual_review_note?: string
+  commute?: CommuteResult
+  suggested_days?: number
+  daily_area?: number
 }
 
 // ─── Equipment (used by risk engine for E-score computation) ─────────────────

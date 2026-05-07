@@ -203,16 +203,98 @@ export default function PricingParamsAdmin() {
       <div>
         <h3 className="text-sm font-semibold text-zinc-600 mb-3">目前生效參數一覽</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-          <ParamCard title="基礎單價（NTD/㎡）">
-            {Object.entries(activeParams.base_price).map(([k, v]) => (
+
+          <ParamCard title="基本費率 Basic rates">
+            <div className="flex justify-between">
+              <span className="text-zinc-500">日費率 daily_rate</span>
+              <span className="font-medium">{activeParams.daily_rate.toLocaleString()} NTD/day</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-500">基礎面積 daily_base_area</span>
+              <span className="font-medium">{activeParams.daily_base_area.toLocaleString()} m²/day</span>
+            </div>
+          </ParamCard>
+
+          <ParamCard title="建物類型係數 building_type_coeff">
+            {Object.entries(activeParams.building_type_coeff).map(([k, v]) => (
               <div key={k} className="flex justify-between">
                 <span className="text-zinc-500">{k}</span>
-                <span className="font-medium">{v}</span>
+                <span className="font-medium">{v as number}</span>
               </div>
             ))}
           </ParamCard>
 
-          <ParamCard title="樓層加乘">
+          <ParamCard title="樓高係數 height_coeff">
+            {activeParams.height_coeff.map((row, i) => (
+              <div key={i} className="flex justify-between">
+                <span className="text-zinc-500">≤{row.max_floor}F</span>
+                <span className="font-medium">×{row.coeff}</span>
+              </div>
+            ))}
+          </ParamCard>
+
+          <ParamCard title="立面複雜度係數 complexity_coeff">
+            {Object.entries(activeParams.complexity_coeff).map(([k, v]) => (
+              <div key={k} className="flex justify-between">
+                <span className="text-zinc-500">{k}</span>
+                <span className="font-medium">{v as number}</span>
+              </div>
+            ))}
+          </ParamCard>
+
+          <ParamCard title="污染係數 contamination_coeff">
+            {Object.entries(activeParams.contamination_coeff).map(([k, v]) => (
+              <div key={k} className="flex justify-between">
+                <span className="text-zinc-500">{k}</span>
+                <span className="font-medium">{v as number}</span>
+              </div>
+            ))}
+          </ParamCard>
+
+          <ParamCard title="清潔劑係數 cleaning_agent_coeff">
+            {Object.entries(activeParams.cleaning_agent_coeff).map(([k, v]) => (
+              <div key={k} className="flex justify-between">
+                <span className="text-zinc-500">{k}</span>
+                <span className="font-medium">{v as number}</span>
+              </div>
+            ))}
+          </ParamCard>
+
+          <ParamCard title="立面修正係數 facade_modifiers">
+            {Object.entries(activeParams.facade_modifiers).map(([k, v]) => (
+              <div key={k} className="flex justify-between">
+                <span className="text-zinc-500">{k}</span>
+                <span className="font-medium">{v as number}</span>
+              </div>
+            ))}
+          </ParamCard>
+
+          <ParamCard title="場址修正 site_modifiers">
+            <p className="text-xs text-zinc-400 uppercase tracking-wide mb-1">region_exposure</p>
+            {Object.entries(activeParams.site_modifiers.region_exposure).map(([k, v]) => (
+              <div key={k} className="flex justify-between">
+                <span className="text-zinc-500">{k}</span>
+                <span className="font-medium">{v as number}</span>
+              </div>
+            ))}
+            <p className="text-xs text-zinc-400 uppercase tracking-wide mt-2 mb-1">crowd_density</p>
+            {Object.entries(activeParams.site_modifiers.crowd_density).map(([k, v]) => (
+              <div key={k} className="flex justify-between">
+                <span className="text-zinc-500">{k}</span>
+                <span className="font-medium">{v as number}</span>
+              </div>
+            ))}
+            <div className="flex justify-between mt-2">
+              <span className="text-zinc-500">near_base_station</span>
+              <span className="font-medium">{activeParams.site_modifiers.near_base_station}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-500">wind_channel_effect</span>
+              <span className="font-medium">{activeParams.site_modifiers.wind_channel_effect}</span>
+            </div>
+          </ParamCard>
+
+          <ParamCard title="樓層加乘 floor_multiplier">
             {activeParams.floor_multiplier.map(f => (
               <div key={f.max_floor} className="flex justify-between">
                 <span className="text-zinc-500">≤{f.max_floor}F</span>
@@ -221,29 +303,65 @@ export default function PricingParamsAdmin() {
             ))}
           </ParamCard>
 
-          <ParamCard title="時段加乘">
+          <ParamCard title="時段加乘 time_window_multiplier">
             {Object.entries(activeParams.time_window_multiplier).map(([k, v]) => (
               <div key={k} className="flex justify-between">
                 <span className="text-zinc-500">{k}</span>
-                <span className="font-medium">×{v}</span>
+                <span className="font-medium">×{v as number}</span>
               </div>
             ))}
           </ParamCard>
 
-          <ParamCard title="其他">
+          <ParamCard title="其他 Other">
             <div className="flex justify-between">
-              <span className="text-zinc-500">急件加乘</span>
+              <span className="text-zinc-500">急件加乘 urgent_multiplier</span>
               <span className="font-medium">×{activeParams.urgent_multiplier}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-zinc-500">最低訂單</span>
+              <span className="text-zinc-500">最低訂單 min_order</span>
               <span className="font-medium">{activeParams.min_order.toLocaleString()} NTD</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-zinc-500">加乘上限</span>
+              <span className="text-zinc-500">加乘上限 quote_max_multiplier</span>
               <span className="font-medium">×{activeParams.quote_max_multiplier}</span>
             </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-500">最終折扣 final_discount</span>
+              <span className="font-medium">×{activeParams.final_discount}</span>
+            </div>
           </ParamCard>
+
+          <ParamCard title="通勤起點 commute_origin">
+            <div className="flex justify-between">
+              <span className="text-zinc-500">lat</span>
+              <span className="font-medium">{activeParams.commute_origin.lat}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-500">lng</span>
+              <span className="font-medium">{activeParams.commute_origin.lng}</span>
+            </div>
+            <div className="text-zinc-500 text-xs mt-1 truncate">{activeParams.commute_origin.address}</div>
+          </ParamCard>
+
+          <ParamCard title="通勤計算 commute">
+            <div className="flex justify-between">
+              <span className="text-zinc-500">fee_per_hour</span>
+              <span className="font-medium">{activeParams.commute.fee_per_hour.toLocaleString()} NTD</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-500">daily_fuel_fee</span>
+              <span className="font-medium">{activeParams.commute.daily_fuel_fee.toLocaleString()} NTD</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-500">lodging_per_day</span>
+              <span className="font-medium">{activeParams.commute.lodging_per_day.toLocaleString()} NTD</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-500">lodging_threshold_hours</span>
+              <span className="font-medium">{activeParams.commute.lodging_threshold_hours} hrs</span>
+            </div>
+          </ParamCard>
+
         </div>
       </div>
     </div>
