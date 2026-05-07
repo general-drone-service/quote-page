@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { computeDailyArea, PRODUCTIVITY_PARAMS_DEFAULT } from "./productivity-engine"
+import { computeDailyArea } from "./productivity-engine"
 import type { QuoteFacadeInput } from "@/app/components/quote-defaults"
 
 const baseFacade = (overrides: Partial<QuoteFacadeInput> = {}): QuoteFacadeInput => ({
