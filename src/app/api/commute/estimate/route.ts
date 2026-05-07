@@ -26,21 +26,29 @@ export async function POST(request: Request) {
   const params = PRICING_PARAMS_DEFAULT
 
   // ── Try cache (rounded to 4 decimal ≈ 11 m precision) ─────────────────────
-  const supabase = getSupabaseAdmin()
+  // Cache is optional — if Supabase isn't configured (local dev) or the table
+  // doesn't exist yet (migration 004 not applied), skip the cache and hit
+  // Google directly. Cache writes are also wrapped so a missing table can't
+  // 500 the route.
   const latRounded = Math.round(body.destination_lat * 10000) / 10000
   const lngRounded = Math.round(body.destination_lng * 10000) / 10000
 
-  const { data: cached } = await supabase
-    .from("commute_cache")
-    .select("one_way_hours, google_response, created_at")
-    .gte("expires_at", new Date().toISOString())
-    .filter("destination_lat", "gte", latRounded - 0.0001)
-    .filter("destination_lat", "lte", latRounded + 0.0001)
-    .filter("destination_lng", "gte", lngRounded - 0.0001)
-    .filter("destination_lng", "lte", lngRounded + 0.0001)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  let supabase: ReturnType<typeof getSupabaseAdmin> | null = null
+  try { supabase = getSupabaseAdmin() } catch { /* no Supabase → no cache */ }
+
+  const { data: cached } = supabase
+    ? await supabase
+        .from("commute_cache")
+        .select("one_way_hours, google_response, created_at")
+        .gte("expires_at", new Date().toISOString())
+        .filter("destination_lat", "gte", latRounded - 0.0001)
+        .filter("destination_lat", "lte", latRounded + 0.0001)
+        .filter("destination_lng", "gte", lngRounded - 0.0001)
+        .filter("destination_lng", "lte", lngRounded + 0.0001)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    : { data: null }
 
   let one_way_hours: number
   let cached_at: string | undefined
@@ -90,12 +98,18 @@ export async function POST(request: Request) {
     const seconds = element.duration_in_traffic?.value ?? element.duration?.value ?? 0
     one_way_hours = seconds / 3600
 
-    await supabase.from("commute_cache").insert({
-      destination_lat: latRounded,
-      destination_lng: lngRounded,
-      one_way_hours,
-      google_response: g,
-    })
+    if (supabase) {
+      try {
+        await supabase.from("commute_cache").insert({
+          destination_lat: latRounded,
+          destination_lng: lngRounded,
+          one_way_hours,
+          google_response: g,
+        })
+      } catch (err) {
+        console.warn("commute_cache insert failed (table missing?):", err)
+      }
+    }
   }
 
   // ── Compute fees ────────────────────────────────────────────────────────────
