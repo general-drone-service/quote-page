@@ -285,18 +285,11 @@ export interface RiskResult {
 // ─── Time Estimation ─────────────────────────────────────────────────────────
 
 export interface TimeResult {
-  baseline_productivity: number
-  adjusted_productivity: number
-  pure_operation_hours: number
-  setup_minutes: number
-  teardown_minutes: number
-  rest_minutes: number
-  buffer_minutes: number
-  total_minutes: number
-  suggested_days: number
-  disruption_buffer_ratio: number
+  pure_operation_days: number   // exact, unrounded
+  suggested_days: number        // ceil(pure_operation_days), min 1
+  total_area: number
+  daily_area: number
   time_model_version: string
-  coefficient_snapshot: Record<string, number>
 }
 
 // ─── Pricing ─────────────────────────────────────────────────────────────────
