@@ -97,6 +97,7 @@ export function QuoteStep3({
         : []
 
       const quote = generateQuote({
+        serviceType: formData.serviceType,
         suggested_days: time.suggested_days,
         multipliers: {
           floors: effectiveFloors,
@@ -105,6 +106,7 @@ export function QuoteStep3({
         },
         commute,
         facadeAreas: facadeAreaItems,
+        total_area_m2: totalArea,
         daily_area,
       }, params)
       if (cancelled) return
@@ -289,16 +291,21 @@ export function QuoteStep3({
                   </td>
                 </tr>
               ))}
-              {extraItems.map(item => (
-                <tr key={item.code} className="border-b border-zinc-100">
-                  <td className="py-2">{item.label}</td>
-                  <td className="text-right py-2 text-zinc-600">—</td>
-                  <td className="text-right py-2 text-zinc-500">—</td>
-                  <td className="text-right py-2 font-medium">
-                    {item.subtotal.toLocaleString()} NTD
-                  </td>
-                </tr>
-              ))}
+              {extraItems.map(item => {
+                const isNote = item.code.startsWith("NOTE-")
+                return (
+                  <tr key={item.code} className={`border-b border-zinc-100 ${isNote ? "bg-amber-50" : ""}`}>
+                    <td className={`py-2 ${isNote ? "font-medium text-amber-800" : ""}`}>
+                      {isNote ? "📋 " : ""}{item.label}
+                    </td>
+                    <td className="text-right py-2 text-zinc-600">—</td>
+                    <td className="text-right py-2 text-zinc-500">—</td>
+                    <td className="text-right py-2 font-medium">
+                      {isNote ? "—" : `${item.subtotal.toLocaleString()} NTD`}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
             <tfoot>
               <tr className="border-t border-zinc-200">

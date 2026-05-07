@@ -27,6 +27,9 @@ export interface PricingParams extends ProductivityParams {
   final_discount: number
   tax_rate: number
 
+  /** Flat rate (NTD/m²) for facade inspection contracts (3-year × 3-visit) */
+  inspection_rate_per_m2: number
+
   commute_origin: CommuteOrigin
   commute: CommuteConfig
 
@@ -50,6 +53,8 @@ export const PRICING_PARAMS_DEFAULT: PricingParams = {
   quote_max_multiplier: 2.5,
   final_discount: 1.0,
   tax_rate: 0.05,
+
+  inspection_rate_per_m2: 35,
 
   commute_origin: {
     lat: 25.0495732,

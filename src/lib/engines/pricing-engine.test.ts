@@ -65,6 +65,35 @@ describe("generateQuote", () => {
     expect(q.final_price).toBe(31500)
   })
 
+  it("inspection: 35 NTD/㎡ × area, single round-trip commute, no lodging, 5% tax", () => {
+    const q = generateQuote({
+      serviceType: "inspection",
+      suggested_days: 99,         // ignored for inspection branch
+      multipliers: { floors: 25, timeWindow: "weekend", urgent: true }, // ignored
+      commute: {
+        ...noCommute,
+        one_way_hours: 1,
+        // these come from the daily-mode commute API but inspection overrides them
+        commute_fee: 99999, fuel_fee: 99999, lodging_fee: 99999,
+      },
+      facadeAreas: [],
+      total_area_m2: 5400,
+    }, PRICING_PARAMS_DEFAULT)
+    // labor = 35 × 5400 = 189000
+    // commute_fee = round(1 × 2 × 2000) = 4000 (single round trip)
+    // fuel_fee = 1000 (single day)
+    // lodging = 0
+    // pre_tax = 189000 + 4000 + 1000 = 194000
+    // tax = round(194000 × 0.05) = 9700
+    // final = 203700
+    expect(q.labor_total).toBe(189000)
+    expect(q.commute_total).toBe(5000)
+    expect(q.tax_total).toBe(9700)
+    expect(q.final_price).toBe(203700)
+    expect(q.line_items.find(i => i.code === "NOTE-INSPECTION")?.label).toContain("3 年 3 次")
+    expect(q.line_items.find(i => i.code === "LODGING")).toBeUndefined()
+  })
+
   it("commute is taxable along with labor", () => {
     const q = generateQuote({
       suggested_days: 4,
