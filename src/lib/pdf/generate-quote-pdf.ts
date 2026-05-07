@@ -137,6 +137,128 @@ export function generateQuotePdf(input: QuotePdfInput): Buffer {
     }
   }
 
+  // ── v1 line items (unit_price per FACE-* item) ─────────────────────────────
+
+  function renderV1LineItems(startY: number): number {
+    let ly = startY
+    checkPageBreak(40)
+    doc.setFontSize(10)
+    setColor("#52525B") // zinc-600
+    doc.text("費用明細", margin, ly)
+    ly += 6
+
+    // Table header
+    doc.setFontSize(8)
+    setColor("#71717A")
+    doc.text("項目", margin, ly)
+    doc.text("施作面積", margin + contentWidth * 0.45, ly, { align: "right" })
+    doc.text("單價", margin + contentWidth * 0.65, ly, { align: "right" })
+    doc.text("小計", margin + contentWidth, ly, { align: "right" })
+    ly += 2
+    drawLine(ly)
+    ly += 5
+
+    // Table rows
+    doc.setFontSize(9)
+    for (const item of pricing.line_items) {
+      checkPageBreak(8)
+      setColor("#18181B")
+      doc.text(item.label.slice(0, 30), margin, ly)
+
+      setColor("#52525B")
+      if (item.area_m2) {
+        doc.text(`${item.area_m2.toLocaleString()} ㎡`, margin + contentWidth * 0.45, ly, { align: "right" })
+      } else {
+        doc.text("—", margin + contentWidth * 0.45, ly, { align: "right" })
+      }
+
+      if (item.unit_price) {
+        doc.text(`${Math.round(item.unit_price)} NTD/㎡`, margin + contentWidth * 0.65, ly, { align: "right" })
+      } else {
+        doc.text("—", margin + contentWidth * 0.65, ly, { align: "right" })
+      }
+
+      setColor("#18181B")
+      doc.text(`${item.subtotal.toLocaleString()} NTD`, margin + contentWidth, ly, { align: "right" })
+      ly += 6
+    }
+
+    // Subtotal
+    drawLine(ly - 2)
+    ly += 3
+    setColor("#71717A")
+    doc.text("小計", margin + contentWidth * 0.65, ly, { align: "right" })
+    setColor("#18181B")
+    doc.text(`${pricing.subtotal.toLocaleString()} NTD`, margin + contentWidth, ly, { align: "right" })
+    ly += 8
+
+    return ly
+  }
+
+  // ── v2 line items (area-only FACE-*, separate LABOR/COMMUTE/FUEL/LODGING) ──
+
+  function renderV2LineItems(startY: number): number {
+    let ly = startY
+    checkPageBreak(40)
+    doc.setFontSize(10)
+    setColor("#52525B") // zinc-600
+    doc.text("費用明細", margin, ly)
+    ly += 6
+
+    // Table header — no unit-price column in v2
+    doc.setFontSize(8)
+    setColor("#71717A")
+    doc.text("項目", margin, ly)
+    doc.text("施作面積", margin + contentWidth * 0.55, ly, { align: "right" })
+    doc.text("小計", margin + contentWidth, ly, { align: "right" })
+    ly += 2
+    drawLine(ly)
+    ly += 5
+
+    // Per-facade rows: label + area only (subtotal is 0 in v2, not shown)
+    const faceItems = pricing.line_items.filter(i => i.code.startsWith("FACE-"))
+    doc.setFontSize(9)
+    for (const item of faceItems) {
+      checkPageBreak(8)
+      setColor("#18181B")
+      doc.text(item.label.slice(0, 35), margin, ly)
+      setColor("#52525B")
+      doc.text(
+        item.area_m2 != null ? `${item.area_m2.toLocaleString()} ㎡` : "—",
+        margin + contentWidth * 0.55,
+        ly,
+        { align: "right" },
+      )
+      // No subtotal column for FACE-* in v2
+      doc.text("—", margin + contentWidth, ly, { align: "right" })
+      ly += 6
+    }
+
+    // Other line items (LABOR, COMMUTE, FUEL, LODGING, MIN-ORDER, …)
+    const otherItems = pricing.line_items.filter(i => !i.code.startsWith("FACE-"))
+    for (const item of otherItems) {
+      checkPageBreak(8)
+      setColor("#18181B")
+      doc.text(item.label.slice(0, 35), margin, ly)
+      setColor("#52525B")
+      doc.text("—", margin + contentWidth * 0.55, ly, { align: "right" })
+      setColor("#18181B")
+      doc.text(`${item.subtotal.toLocaleString()} NTD`, margin + contentWidth, ly, { align: "right" })
+      ly += 6
+    }
+
+    // Subtotal (labor before multipliers)
+    drawLine(ly - 2)
+    ly += 3
+    setColor("#71717A")
+    doc.text("作業小計", margin + contentWidth * 0.55, ly, { align: "right" })
+    setColor("#18181B")
+    doc.text(`${pricing.subtotal.toLocaleString()} NTD`, margin + contentWidth, ly, { align: "right" })
+    ly += 8
+
+    return ly
+  }
+
   // ── Header ─────────────────────────────────────────────────────────────────
 
   doc.setFillColor(39, 39, 42) // zinc-800
@@ -205,56 +327,13 @@ export function generateQuotePdf(input: QuotePdfInput): Buffer {
 
   // ── Line items table ───────────────────────────────────────────────────────
 
-  checkPageBreak(40)
-  doc.setFontSize(10)
-  setColor("#52525B") // zinc-600
-  doc.text("費用明細", margin, y)
-  y += 6
+  const isV2 = (pricing.pricing_version ?? "").startsWith("v2")
 
-  // Table header
-  doc.setFontSize(8)
-  setColor("#71717A")
-  doc.text("項目", margin, y)
-  doc.text("施作面積", margin + contentWidth * 0.45, y, { align: "right" })
-  doc.text("單價", margin + contentWidth * 0.65, y, { align: "right" })
-  doc.text("小計", margin + contentWidth, y, { align: "right" })
-  y += 2
-  drawLine(y)
-  y += 5
-
-  // Table rows
-  doc.setFontSize(9)
-  for (const item of pricing.line_items) {
-    checkPageBreak(8)
-    setColor("#18181B")
-    doc.text(item.label.slice(0, 30), margin, y)
-
-    setColor("#52525B")
-    if (item.area_m2) {
-      doc.text(`${item.area_m2.toLocaleString()} ㎡`, margin + contentWidth * 0.45, y, { align: "right" })
-    } else {
-      doc.text("—", margin + contentWidth * 0.45, y, { align: "right" })
-    }
-
-    if (item.unit_price) {
-      doc.text(`${Math.round(item.unit_price)} NTD/㎡`, margin + contentWidth * 0.65, y, { align: "right" })
-    } else {
-      doc.text("—", margin + contentWidth * 0.65, y, { align: "right" })
-    }
-
-    setColor("#18181B")
-    doc.text(`${item.subtotal.toLocaleString()} NTD`, margin + contentWidth, y, { align: "right" })
-    y += 6
+  if (isV2) {
+    y = renderV2LineItems(y)
+  } else {
+    y = renderV1LineItems(y)
   }
-
-  // Subtotal
-  drawLine(y - 2)
-  y += 3
-  setColor("#71717A")
-  doc.text("小計", margin + contentWidth * 0.65, y, { align: "right" })
-  setColor("#18181B")
-  doc.text(`${pricing.subtotal.toLocaleString()} NTD`, margin + contentWidth, y, { align: "right" })
-  y += 8
 
   // ── Multipliers ────────────────────────────────────────────────────────────
 
