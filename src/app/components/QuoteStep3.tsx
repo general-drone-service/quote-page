@@ -31,10 +31,10 @@ const SOURCE_LABELS: Record<string, string> = {
 }
 
 const FLOOR_MULTIPLIER_LABEL: Record<string, string> = {
-  "1":   "無加價",
-  "1.1": "11-20F 加價",
-  "1.3": "21-30F 加價",
-  "1.5": ">30F 加價",
+  "1":    "無加價",
+  "1.05": "11-20F 加價",
+  "1.12": "21-30F 加價",
+  "1.25": ">30F 加價",
 }
 
 const BUILDING_LABELS: Record<string, string> = {

@@ -145,6 +145,7 @@ function worstDirtType<K extends string>(
   dirts: readonly K[],
   coeffs: Record<K, number>,
 ): K {
+  if (dirts.length === 0) return "dust" as K
   // Lower coeff = worse (slower)
   return dirts.reduce((worst, curr) =>
     (coeffs[curr] ?? 1) < (coeffs[worst] ?? 1) ? curr : worst

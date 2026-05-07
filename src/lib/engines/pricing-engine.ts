@@ -79,9 +79,10 @@ export function generateQuote(
     })
   }
   if (input.commute.lodging_fee > 0) {
+    const perNight = Math.round(input.commute.lodging_fee / days)
     line_items.push({
       code: "LODGING",
-      label: `食宿（${days}晚 × 6,000）`,
+      label: `食宿（${days}晚 × ${perNight.toLocaleString()}）`,
       subtotal: input.commute.lodging_fee,
     })
   }

@@ -48,9 +48,9 @@ const SOURCE_LABELS: Record<string, string> = {
 
 const FLOOR_MULT_LABELS: Record<string, string> = {
   "1": "無加價",
-  "1.3": "11-20F",
-  "2": "21-30F",
-  "3": ">30F",
+  "1.05": "11-20F",
+  "1.12": "21-30F",
+  "1.25": ">30F",
 }
 
 const MULT_KEY_LABELS: Record<string, string> = {

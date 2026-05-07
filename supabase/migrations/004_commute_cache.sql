@@ -16,3 +16,8 @@ create index idx_commute_cache_destination on public.commute_cache (
   round(destination_lng, 4)
 );
 create index idx_commute_cache_expires on public.commute_cache (expires_at);
+
+-- Default-deny: only the service-role key (server-only routes) can read/write.
+-- The anon key has no policy, so it has no access. This prevents enumeration
+-- of cached client site coordinates via the public Supabase API.
+alter table public.commute_cache enable row level security;
