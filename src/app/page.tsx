@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react"
 import type { AirspaceResult, PricingResult, TimeResult } from "@/lib/types"
-import type { QuoteFormData, AreaEstimate, BuildingDimensions } from "./components/quote-defaults"
+import type { QuoteFormData, AreaEstimate } from "./components/quote-defaults"
 import { buildDefaultFacadeInputs } from "./components/quote-defaults"
 import { QuoteStep1 } from "./components/QuoteStep1"
 import { QuoteStep2 } from "./components/QuoteStep2"
@@ -32,9 +32,6 @@ export default function QuotePage() {
   const [step, setStep] = useState(0)
   const [formData, setFormData] = useState<Partial<QuoteFormData>>(INITIAL_FORM)
   const [airspace, setAirspace] = useState<AirspaceResult | null>(null)
-  const [buildingPerimeter, setBuildingPerimeter] = useState<number | null>(null)
-  const [buildingPolygon, setBuildingPolygon] = useState<{ lat: number; lon: number }[] | null>(null)
-  const [buildingDimensions, setBuildingDimensions] = useState<BuildingDimensions | null>(null)
   const [buildingName, setBuildingName] = useState<string | null>(null)
   const [areaEstimate, setAreaEstimate] = useState<AreaEstimate | null>(null)
   const [pricing, setPricing] = useState<PricingResult | null>(null)
@@ -48,11 +45,9 @@ export default function QuotePage() {
   // Refs so saveDraft always reads latest values without re-creating the callback
   const formDataRef = useRef(formData)
   const areaEstimateRef = useRef(areaEstimate)
-  const buildingPolygonRef = useRef(buildingPolygon)
   const buildingNameRef = useRef(buildingName)
   useEffect(() => { formDataRef.current = formData }, [formData])
   useEffect(() => { areaEstimateRef.current = areaEstimate }, [areaEstimate])
-  useEffect(() => { buildingPolygonRef.current = buildingPolygon }, [buildingPolygon])
   useEffect(() => { buildingNameRef.current = buildingName }, [buildingName])
 
   const saveDraft = useCallback(async (nextStep: number) => {
@@ -78,7 +73,6 @@ export default function QuotePage() {
           step: nextStep,
           form_data: formDataRef.current,
           area_estimate: areaEstimateRef.current,
-          building_polygon: buildingPolygonRef.current,
           building_name: buildingNameRef.current,
           map_screenshot_base64: mapScreenshotBase64,
         }),
@@ -107,9 +101,6 @@ export default function QuotePage() {
     window.scrollTo({ top: 0, behavior: "smooth" })
     setFormData(INITIAL_FORM)
     setAirspace(null)
-    setBuildingPerimeter(null)
-    setBuildingPolygon(null)
-    setBuildingDimensions(null)
     setBuildingName(null)
     setAreaEstimate(null)
     setPricing(null)
@@ -147,9 +138,6 @@ export default function QuotePage() {
           updateForm={updateForm}
           airspace={airspace}
           setAirspace={setAirspace}
-          setBuildingPerimeter={setBuildingPerimeter}
-          setBuildingPolygon={setBuildingPolygon}
-          setBuildingDimensions={setBuildingDimensions}
           setBuildingName={setBuildingName}
           buildingName={buildingName}
           onNext={goNext}
@@ -159,9 +147,6 @@ export default function QuotePage() {
         <QuoteStep2
           formData={formData}
           updateForm={updateForm}
-          buildingPerimeter={buildingPerimeter}
-          buildingPolygon={buildingPolygon}
-          buildingDimensions={buildingDimensions}
           areaEstimate={areaEstimate}
           setAreaEstimate={setAreaEstimate}
           onNext={goNext}
