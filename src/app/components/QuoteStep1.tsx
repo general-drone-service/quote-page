@@ -2,9 +2,8 @@
 
 import { useState, useCallback } from "react"
 import type { AirspaceResult } from "@/lib/types"
-import type { QuoteFormData, BuildingDimensions } from "./quote-defaults"
+import type { QuoteFormData } from "./quote-defaults"
 import { SERVICE_OPTIONS, getWeatherRisk } from "./quote-defaults"
-import { calcPolygonPerimeter } from "./quote-defaults"
 import { QuoteMap } from "./QuoteMap"
 
 interface Props {
@@ -12,9 +11,6 @@ interface Props {
   updateForm: (patch: Partial<QuoteFormData>) => void
   airspace: AirspaceResult | null
   setAirspace: (a: AirspaceResult | null) => void
-  setBuildingPerimeter: (p: number | null) => void
-  setBuildingPolygon: (p: { lat: number; lon: number }[] | null) => void
-  setBuildingDimensions: (d: BuildingDimensions | null) => void
   setBuildingName: (n: string | null) => void
   buildingName: string | null
   onNext: () => void
@@ -53,7 +49,6 @@ function parseCoordinates(raw: string): { lat: number; lng: number } | null {
 
 export function QuoteStep1({
   formData, updateForm, airspace, setAirspace,
-  setBuildingPerimeter, setBuildingPolygon, setBuildingDimensions,
   setBuildingName, buildingName, onNext,
 }: Props) {
   const [geocoding, setGeocoding] = useState(false)
@@ -64,31 +59,15 @@ export function QuoteStep1({
   const [posUpdating, setPosUpdating] = useState(false)
   const [locating, setLocating] = useState(false)
 
-  // ── Re-fetch airspace + Overpass for any lat/lng ──────────────────────────
+  // ── Re-fetch airspace for any lat/lng ────────────────────────────────────
   const refetchForPosition = useCallback(async (lat: number, lng: number) => {
     setPosUpdating(true)
     try {
-      const [airRes, ovRes] = await Promise.all([
-        fetch(`/api/airspace/query?lat=${lat}&lng=${lng}`),
-        fetch(`/api/overpass?lat=${lat}&lng=${lng}`),
-      ])
+      const airRes = await fetch(`/api/airspace/query?lat=${lat}&lng=${lng}`)
       setAirspace(await airRes.json())
-
-      const ov = await ovRes.json()
-      if (ov.status === "found" && ov.geometry) {
-        setBuildingPerimeter(calcPolygonPerimeter(ov.geometry))
-        setBuildingPolygon(ov.geometry)
-        if (ov.dimensions) setBuildingDimensions(ov.dimensions)
-        if (ov.name) setBuildingName(ov.name)
-      } else {
-        // Cleared — no building polygon found at new position
-        setBuildingPerimeter(null)
-        setBuildingPolygon(null)
-        setBuildingDimensions(null)
-      }
     } catch { /* non-critical */ }
     finally { setPosUpdating(false) }
-  }, [setAirspace, setBuildingPerimeter, setBuildingPolygon, setBuildingDimensions, setBuildingName])
+  }, [setAirspace])
 
   // ── Called by draggable marker or map click ───────────────────────────────
   const handlePositionChange = useCallback((lat: number, lng: number) => {
@@ -102,9 +81,6 @@ export function QuoteStep1({
     setGeocoding(true)
     setGeocodeError("")
     setAirspace(null)
-    setBuildingPerimeter(null)
-    setBuildingPolygon(null)
-    setBuildingDimensions(null)
     setBuildingName(null)
 
     try {
@@ -126,7 +102,7 @@ export function QuoteStep1({
     } finally {
       setGeocoding(false)
     }
-  }, [searchInput, updateForm, setBuildingName, refetchForPosition, setAirspace, setBuildingPerimeter, setBuildingPolygon, setBuildingDimensions])
+  }, [searchInput, updateForm, setBuildingName, refetchForPosition, setAirspace])
 
   // ── My location (GPS) ────────────────────────────────────────────────────
   const handleMyLocation = useCallback(async () => {
@@ -137,9 +113,6 @@ export function QuoteStep1({
     setLocating(true)
     setGeocodeError("")
     setAirspace(null)
-    setBuildingPerimeter(null)
-    setBuildingPolygon(null)
-    setBuildingDimensions(null)
     setBuildingName(null)
 
     navigator.geolocation.getCurrentPosition(
@@ -173,7 +146,7 @@ export function QuoteStep1({
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     )
-  }, [updateForm, refetchForPosition, setAirspace, setBuildingPerimeter, setBuildingPolygon, setBuildingDimensions, setBuildingName])
+  }, [updateForm, refetchForPosition, setAirspace, setBuildingName])
 
   // ── Manual coordinate input ───────────────────────────────────────────────
   const handleCoordApply = useCallback(() => {
