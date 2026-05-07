@@ -53,6 +53,7 @@ export function QuoteStep2({
   const numFacades = formData.numFacades ?? 4
   const numBuildings = formData.numBuildings ?? 1
   const buildingType = formData.buildingType ?? "commercial"
+  const isInspection = formData.serviceType === "inspection"
   const [overrideWidth, setOverrideWidth] = useState<string>("")
   const [drawMode, setDrawMode] = useState(false)
 
@@ -284,6 +285,7 @@ export function QuoteStep2({
             )}
           </div>
 
+          {!isInspection && (
           <div>
             <label className="block text-sm font-medium text-zinc-700 mb-1">施工時段</label>
             <select value={formData.timeSlot ?? "day"}
@@ -293,7 +295,9 @@ export function QuoteStep2({
               {TIME_SLOT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
+          )}
 
+          {!isInspection && (
           <div>
             <label className="block text-sm font-medium text-zinc-700 mb-1">
               清潔方式
@@ -334,7 +338,9 @@ export function QuoteStep2({
               />
             )}
           </div>
+          )}
 
+          {!isInspection && (
           <div>
             <label className="block text-sm font-medium text-zinc-700 mb-1">
               屋頂吊掛條件
@@ -350,8 +356,10 @@ export function QuoteStep2({
               <option value="NotAvailable">不可使用</option>
             </select>
           </div>
+          )}
 
           {/* LARM site inputs — synced with LAOP Step3Building */}
+          {!isInspection && (
           <div className="pt-3 border-t border-zinc-200">
             <p className="text-xs font-semibold text-zinc-500 mb-3 uppercase tracking-wider">場址環境（LARM 風險評估）</p>
 
@@ -415,6 +423,7 @@ export function QuoteStep2({
               </div>
             </div>
           </div>
+          )}
         </div>
 
         {/* Right: map + area estimation */}
@@ -616,16 +625,18 @@ export function QuoteStep2({
       </div>
 
       {/* ── Section 2: Per-facade editor ── */}
-      <div className="border-t border-zinc-200 pt-6">
-        {formData.facadeInputs && formData.facadeInputs.length > 0 && (
-          <QuoteFacadeEditor
-            facades={formData.facadeInputs}
-            facadeWidths_m={areaEstimate?.facadeWidths_m}
-            numBuildings={numBuildings}
-            onChange={handleFacadesChange}
-          />
-        )}
-      </div>
+      {!isInspection && (
+        <div className="border-t border-zinc-200 pt-6">
+          {formData.facadeInputs && formData.facadeInputs.length > 0 && (
+            <QuoteFacadeEditor
+              facades={formData.facadeInputs}
+              facadeWidths_m={areaEstimate?.facadeWidths_m}
+              numBuildings={numBuildings}
+              onChange={handleFacadesChange}
+            />
+          )}
+        </div>
+      )}
 
       {/* Navigation */}
       <div className="flex justify-between pt-2 gap-3">

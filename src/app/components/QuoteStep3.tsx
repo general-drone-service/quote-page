@@ -136,6 +136,7 @@ export function QuoteStep3({
   const numBuildings = formData.numBuildings ?? 1
   // project_total_m2 is set when buildings have different sizes; otherwise multiply
   const totalArea = areaEstimate.project_total_m2 ?? (areaEstimate.total_area_m2 * numBuildings)
+  const isInspection = formData.serviceType === "inspection"
 
   // Separate line items by type. Per business rule, three categories are
   // hidden from the customer-facing 費用明細 table even though their amounts
@@ -261,7 +262,9 @@ export function QuoteStep3({
         )}
 
         {/* Weather risk advisory */}
-        <WeatherAdvisory date={formData.expectedDate} suggestedDays={timeResult.suggested_days} />
+        {!isInspection && (
+          <WeatherAdvisory date={formData.expectedDate} suggestedDays={timeResult.suggested_days} />
+        )}
 
         {/* Line items — grouped by building */}
         <div className="px-4 sm:px-6 py-4">
@@ -348,9 +351,12 @@ export function QuoteStep3({
               <p className="text-3xl font-bold">NTD {pricing.final_price.toLocaleString()}</p>
             </div>
             <div className="text-right">
-              <p className="text-blue-200 text-sm">預估工期（含緩衝）</p>
+              <p className="text-blue-200 text-sm">預估工期{isInspection ? "" : "（含緩衝）"}</p>
               <p className="text-2xl font-bold">
-                {(pricing.suggested_days ?? timeResult.suggested_days) + getWeatherRisk(formData.expectedDate).bufferDays} 天
+                {isInspection
+                  ? 2
+                  : (pricing.suggested_days ?? timeResult.suggested_days) + getWeatherRisk(formData.expectedDate).bufferDays
+                } 天
               </p>
             </div>
           </div>
