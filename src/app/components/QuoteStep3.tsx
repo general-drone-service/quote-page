@@ -83,15 +83,12 @@ export function QuoteStep3({
       if (cancelled) return
       setTimeResult(time)
 
-      // 3. Weather buffer days fold into the chargeable workday count
-      const weatherBuffer = getWeatherRisk(formData.expectedDate).bufferDays
-      const totalChargeableDays = time.suggested_days + weatherBuffer
-
-      // 4. Commute (uses chargeable days for fee×days math)
-      const commute = await estimateCommute(formData.lat, formData.lng, totalChargeableDays)
+      // 3. Commute uses work days only (buffer is not chargeable)
+      const commute = await estimateCommute(formData.lat, formData.lng, time.suggested_days)
       if (cancelled) return
 
-      // 5. Final price
+      // 4. Final price — uses work days only (weather buffer is shown to the
+      //    customer for scheduling but does not multiply the day-rate)
       const facadeAreaItems = facades.length > 0
         ? facades.map((f, i) => ({
             label: f.buildingLabel ? `${f.buildingLabel}棟-${f.label}` : f.label,
@@ -100,7 +97,7 @@ export function QuoteStep3({
         : []
 
       const quote = generateQuote({
-        suggested_days: totalChargeableDays,
+        suggested_days: time.suggested_days,
         multipliers: {
           floors: effectiveFloors,
           timeWindow: (formData.timeSlot ?? "day") as "day" | "weekend" | "night",
@@ -344,8 +341,10 @@ export function QuoteStep3({
               <p className="text-3xl font-bold">NTD {pricing.final_price.toLocaleString()}</p>
             </div>
             <div className="text-right">
-              <p className="text-blue-200 text-sm">預估工期</p>
-              <p className="text-2xl font-bold">{pricing.suggested_days ?? timeResult.suggested_days} 天</p>
+              <p className="text-blue-200 text-sm">預估工期（含緩衝）</p>
+              <p className="text-2xl font-bold">
+                {(pricing.suggested_days ?? timeResult.suggested_days) + getWeatherRisk(formData.expectedDate).bufferDays} 天
+              </p>
             </div>
           </div>
         </div>
