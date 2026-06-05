@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { setOptions, importLibrary } from "@googlemaps/js-api-loader"
 import type { AirspaceResult } from "@/lib/types"
 
@@ -31,7 +31,10 @@ function ensureOptions() {
   if (!apiKey) {
     console.warn("NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY not set; map will fail")
   }
-  setOptions({ key: apiKey, v: "weekly", libraries: ["geometry", "drawing", "marker"] })
+  // NOTE: the "drawing" library is intentionally NOT requested. Google deprecated
+  // google.maps.drawing in Aug 2025 and made it unavailable in May 2026 — importing it
+  // now rejects and would break the whole map load. We draw polygons manually instead.
+  setOptions({ key: apiKey, v: "weekly", libraries: ["geometry", "marker"] })
   optionsSet = true
 }
 
@@ -40,19 +43,17 @@ type LoadedLibs = {
   mapsLib: google.maps.MapsLibrary
   markerLib: google.maps.MarkerLibrary
   geometryLib: google.maps.GeometryLibrary
-  drawingLib: google.maps.DrawingLibrary
 }
 
 async function loadMapsLibs(): Promise<LoadedLibs> {
   ensureOptions()
-  const [coreLib, mapsLib, markerLib, geometryLib, drawingLib] = await Promise.all([
+  const [coreLib, mapsLib, markerLib, geometryLib] = await Promise.all([
     importLibrary("core") as Promise<google.maps.CoreLibrary>,
     importLibrary("maps") as Promise<google.maps.MapsLibrary>,
     importLibrary("marker") as Promise<google.maps.MarkerLibrary>,
     importLibrary("geometry") as Promise<google.maps.GeometryLibrary>,
-    importLibrary("drawing") as Promise<google.maps.DrawingLibrary>,
   ])
-  return { coreLib, mapsLib, markerLib, geometryLib, drawingLib }
+  return { coreLib, mapsLib, markerLib, geometryLib }
 }
 
 export function QuoteMap({
@@ -69,9 +70,16 @@ export function QuoteMap({
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<google.maps.Map | null>(null)
   const markerRef = useRef<google.maps.Marker | null>(null)
-  const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null)
   const persistedPolygonsRef = useRef<google.maps.Polygon[]>([])
   const persistedLabelsRef = useRef<google.maps.OverlayView[]>([])
+  // Set once the map instance exists; lets the draw effect re-run when the map is ready.
+  const [mapReady, setMapReady] = useState(false)
+
+  // Stable refs for draw callbacks so the draw listeners never close over stale props.
+  const onPolygonDrawRef = useRef(onPolygonDraw)
+  const onDrawModeEndRef = useRef(onDrawModeEnd)
+  useEffect(() => { onPolygonDrawRef.current = onPolygonDraw }, [onPolygonDraw])
+  useEffect(() => { onDrawModeEndRef.current = onDrawModeEnd }, [onDrawModeEnd])
 
   // ── Initialize map (once) ─────────────────────────────────────────────────
   useEffect(() => {
@@ -86,12 +94,17 @@ export function QuoteMap({
         mapTypeId: mapsLib.MapTypeId.HYBRID,
         streetViewControl: false,
         mapTypeControl: false,
+        clickableIcons: false, // POI labels must not swallow draw clicks
       })
       mapRef.current = map
+      setMapReady(true)
 
       const marker = new markerLib.Marker({
         map, position: { lat, lng },
         draggable: !!onPositionChange,
+        // In draw-only mode (no onPositionChange) keep the pin click-through so it
+        // never eats a vertex click landing on it.
+        clickable: !!onPositionChange,
       })
       markerRef.current = marker
 
@@ -119,43 +132,139 @@ export function QuoteMap({
     markerRef.current.setPosition(pos)
   }, [lat, lng])
 
-  // ── Drawing manager ───────────────────────────────────────────────────────
+  // ── Manual polygon draw ────────────────────────────────────────────────────
+  // The Google Maps Drawing library (DrawingManager) was removed in May 2026, so we
+  // implement click-to-draw ourselves with plain map listeners + Polyline/Marker, and
+  // compute area/length with the geometry library. UX mirrors the prior Leaflet build:
+  // click to add vertices, click the first vertex (red, snaps) or double-click to close,
+  // 2 vertices = single facade line, ≥3 = polygon.
   useEffect(() => {
     const map = mapRef.current
-    if (!map) return
-    loadMapsLibs().then(({ coreLib, geometryLib, drawingLib }) => {
-      if (!drawMode) {
-        drawingManagerRef.current?.setMap(null)
-        drawingManagerRef.current = null
-        return
-      }
-      const dm = new drawingLib.DrawingManager({
-        drawingMode: drawingLib.OverlayType.POLYGON,
-        drawingControl: false,
-        polygonOptions: {
-          fillColor: "#2563eb", fillOpacity: 0.2,
-          strokeColor: "#2563eb", strokeWeight: 2,
-          editable: false, draggable: false,
-        },
-      })
-      dm.setMap(map)
-      drawingManagerRef.current = dm
+    if (!map || !mapReady || !drawMode) return
 
-      coreLib.event.addListener(dm, "polygoncomplete", (poly: google.maps.Polygon) => {
-        const path = poly.getPath()
-        const verts: [number, number][] = []
-        for (let i = 0; i < path.getLength(); i++) {
-          const ll = path.getAt(i)
-          verts.push([ll.lat(), ll.lng()])
-        }
-        const area_m2 = geometryLib.spherical.computeArea(path)
-        const perimeter_m = geometryLib.spherical.computeLength(path)
-        poly.setMap(null)
-        onPolygonDraw?.(verts, area_m2, perimeter_m)
-        onDrawModeEnd?.()
+    let cancelled = false
+    let cleanup: (() => void) | null = null
+
+    loadMapsLibs().then(({ coreLib, mapsLib, markerLib, geometryLib }) => {
+      if (cancelled) return
+      const sph = geometryLib.spherical
+      const SNAP_M = 10 // snap distance to first vertex (meters)
+
+      let vertices: google.maps.LatLng[] = []
+      let vertexTimes: number[] = [] // ms timestamp per vertex; lets dblclick drop its leading click
+      let vertexMarkers: google.maps.Marker[] = []
+      let edgeLines: google.maps.Polyline[] = []
+      let previewLine: google.maps.Polyline | null = null
+      let complete = false
+
+      const prevDblZoom = map.get("disableDoubleClickZoom") as boolean | undefined
+      map.setOptions({ disableDoubleClickZoom: true, draggableCursor: "crosshair" })
+
+      const vertexIcon = (first: boolean, near = false): google.maps.Symbol => ({
+        path: coreLib.SymbolPath.CIRCLE,
+        scale: first ? (near ? 10 : 7) : 5,
+        fillColor: first ? "#ef4444" : "#ffffff",
+        fillOpacity: 1,
+        strokeColor: near ? "#dc2626" : "#2563eb",
+        strokeWeight: 2,
       })
+
+      const clearInProgress = () => {
+        vertexMarkers.forEach(m => m.setMap(null))
+        edgeLines.forEach(l => l.setMap(null))
+        previewLine?.setMap(null)
+        previewLine = null
+        vertexMarkers = []
+        edgeLines = []
+        vertices = []
+        vertexTimes = []
+      }
+
+      const closePolygon = () => {
+        if (vertices.length < 2 || complete) return
+        complete = true
+        const verts: [number, number][] = vertices.map(v => [v.lat(), v.lng()])
+        // 2 verts → single facade line (edge length); ≥3 → polygon (footprint area + closed perimeter)
+        const area_m2 = verts.length >= 3 ? sph.computeArea(vertices) : 0
+        const perimeter_m = verts.length === 2
+          ? sph.computeDistanceBetween(vertices[0], vertices[1])
+          : sph.computeLength([...vertices, vertices[0]])
+        clearInProgress()
+        onPolygonDrawRef.current?.(verts, area_m2, perimeter_m)
+        onDrawModeEndRef.current?.()
+      }
+
+      const clickL = map.addListener("click", (e: google.maps.MapMouseEvent) => {
+        if (complete || !e.latLng) return
+        // Snap to first vertex to close (≥2 for single facade, ≥3 for polygon)
+        if (vertices.length >= 2 && sph.computeDistanceBetween(e.latLng, vertices[0]) <= SNAP_M) {
+          closePolygon()
+          return
+        }
+        const isFirst = vertices.length === 0
+        vertices.push(e.latLng)
+        vertexTimes.push(Date.now())
+        vertexMarkers.push(new markerLib.Marker({
+          map, position: e.latLng, clickable: false, zIndex: 10,
+          icon: vertexIcon(isFirst),
+        }))
+        if (vertices.length >= 2) {
+          edgeLines.push(new mapsLib.Polyline({
+            map, clickable: false,
+            path: [vertices[vertices.length - 2], vertices[vertices.length - 1]],
+            strokeColor: "#2563eb", strokeWeight: 2,
+          }))
+        }
+      })
+
+      const moveL = map.addListener("mousemove", (e: google.maps.MapMouseEvent) => {
+        if (complete || vertices.length === 0 || !e.latLng) return
+        const last = vertices[vertices.length - 1]
+        if (previewLine) previewLine.setPath([last, e.latLng])
+        else previewLine = new mapsLib.Polyline({
+          map, clickable: false, path: [last, e.latLng], strokeOpacity: 0,
+          icons: [{
+            icon: { path: "M 0,-1 0,1", strokeColor: "#2563eb", strokeOpacity: 1, scale: 3 },
+            offset: "0", repeat: "12px",
+          }],
+        })
+        // Highlight first vertex when the cursor is near enough to snap-close
+        if (vertices.length >= 2 && vertexMarkers[0]) {
+          const near = sph.computeDistanceBetween(e.latLng, vertices[0]) <= SNAP_M
+          vertexMarkers[0].setIcon(vertexIcon(true, near))
+        }
+      })
+
+      const dblL = map.addListener("dblclick", () => {
+        if (complete) return
+        // Google emits a click (occasionally two) right before dblclick, each of which already
+        // committed a vertex. Drop those just-added points so double-click closes with only the
+        // user's deliberate vertices (mirrors the prior Leaflet build, which stopped the click).
+        const now = Date.now()
+        while (vertices.length > 0 && now - vertexTimes[vertices.length - 1] < 400) {
+          const hadEdge = vertices.length >= 2
+          vertices.pop()
+          vertexTimes.pop()
+          vertexMarkers.pop()?.setMap(null)
+          if (hadEdge) edgeLines.pop()?.setMap(null)
+        }
+        if (vertices.length >= 2) closePolygon()
+      })
+
+      cleanup = () => {
+        clickL.remove()
+        moveL.remove()
+        dblL.remove()
+        clearInProgress()
+        map.setOptions({ disableDoubleClickZoom: !!prevDblZoom, draggableCursor: null })
+      }
     })
-  }, [drawMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+    return () => {
+      cancelled = true
+      cleanup?.()
+    }
+  }, [drawMode, mapReady])
 
   // ── Render persisted shapes ───────────────────────────────────────────────
   useEffect(() => {
@@ -168,13 +277,16 @@ export function QuoteMap({
 
     if (!persistedShapes?.length) return
 
+    let cancelled = false
     loadMapsLibs().then(({ coreLib, mapsLib }) => {
+      if (cancelled) return // a newer run superseded this one; don't stack stale graphics
       for (const shape of persistedShapes!) {
         const path = shape.vertices.map(([vlat, vlng]) => ({ lat: vlat, lng: vlng }))
         const poly = new mapsLib.Polygon({
           map, paths: path,
           fillColor: "#10b981", fillOpacity: 0.25,
           strokeColor: "#059669", strokeWeight: 2,
+          clickable: false, // display-only; must not swallow clicks meant for drawing
         })
         persistedPolygonsRef.current.push(poly)
 
@@ -190,7 +302,17 @@ export function QuoteMap({
         }
       }
     })
-  }, [persistedShapes])
+
+    return () => {
+      cancelled = true
+      // Graphics are created post-await; drop anything this run already added so a
+      // superseding re-run / StrictMode double-invoke can't leave stacked duplicates.
+      persistedPolygonsRef.current.forEach(p => p.setMap(null))
+      persistedLabelsRef.current.forEach(l => l.setMap(null))
+      persistedPolygonsRef.current = []
+      persistedLabelsRef.current = []
+    }
+  }, [persistedShapes, mapReady])
 
   return (
     <div ref={containerRef} className="w-full h-[400px] rounded-lg border border-zinc-300" />
