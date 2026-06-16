@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react"
 import { buildLineOaMessageUrl } from "@/lib/line/constants"
 import { saveQuote } from "@/lib/stores/quote-store"
+import { readAdFirstTouch } from "@/lib/ad-cookie"
 import type { PricingResult, TimeResult } from "@/lib/types"
 import type { QuoteFormData, AreaEstimate } from "./quote-defaults"
 
@@ -40,11 +41,16 @@ export function LineQuoteCta({ pricing, timeResult, formData, areaEstimate, buil
         suggested_days: timeResult.suggested_days,
       })
 
+      // Ad attribution (first-touch cookie, survives the 3-step wizard)
+      const ad = readAdFirstTouch()
+
       // Generate PDF & save to server
       const res = await fetch("/api/quote/generate-and-save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          adSearch: ad.search,
+          landingPath: ad.path,
           pricing,
           timeResult,
           formData: {

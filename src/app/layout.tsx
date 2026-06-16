@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import "./globals.css"
+import { AdCapture } from "./components/AdCapture"
 
 export const metadata: Metadata = {
   title: "GDS 快速報價 — 低空外牆作業",
@@ -10,6 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-TW" suppressHydrationWarning>
       <body className="antialiased font-sans">
+        <AdCapture />
         <div className="min-h-screen bg-white text-zinc-800 font-sans">
           {/* Standalone header */}
           <header className="border-b border-zinc-200 bg-white sticky top-0 z-50">
