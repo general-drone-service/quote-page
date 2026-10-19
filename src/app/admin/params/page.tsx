@@ -25,6 +25,8 @@ export default function PricingParamsAdmin() {
   const [newNotes, setNewNotes] = useState("")
   const [editParams, setEditParams] = useState("")
   const [saving, setSaving] = useState(false)
+  // Kept in memory only: reloading the page asks for it again
+  const [adminToken, setAdminToken] = useState("")
 
   const fetchParams = useCallback(async () => {
     try {
@@ -63,7 +65,7 @@ export default function PricingParamsAdmin() {
 
       const res = await fetch("/api/pricing-params", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
         body: JSON.stringify({
           version: newVersion,
           params,
@@ -74,7 +76,7 @@ export default function PricingParamsAdmin() {
 
       if (!res.ok) {
         const err = await res.json()
-        setError((err as { error?: string }).error ?? "儲存失敗")
+        setError(res.status === 401 ? "管理密鑰不正確" : ((err as { error?: string }).error ?? "儲存失敗"))
         return
       }
 
@@ -89,12 +91,14 @@ export default function PricingParamsAdmin() {
   }
 
   const handleActivate = async (version: string) => {
+    setError(null)
     const res = await fetch("/api/pricing-params", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
       body: JSON.stringify({ version }),
     })
     if (res.ok) fetchParams()
+    else setError(res.status === 401 ? "管理密鑰不正確" : "啟用失敗")
   }
 
   if (loading) {
@@ -108,6 +112,17 @@ export default function PricingParamsAdmin() {
         <p className="text-sm text-zinc-500 mt-1">
           目前使用版本：<span className="font-mono font-medium text-blue-600">{activeVersion}</span>
         </p>
+      </div>
+
+      <div className="max-w-sm">
+        <label className="block text-sm text-zinc-600 mb-1">管理密鑰（建立或啟用版本時需要）</label>
+        <input
+          type="password"
+          autoComplete="off"
+          value={adminToken}
+          onChange={e => setAdminToken(e.target.value)}
+          className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm"
+        />
       </div>
 
       {error && (

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabase/client"
+import { rejectUnlessBearer } from "@/lib/bearer-auth"
 import { PRICING_PARAMS_DEFAULT, type PricingParams } from "@/lib/engines/pricing-params"
 
 // ─── GET: Read active pricing params ─────────────────────────────────────────
@@ -36,7 +37,7 @@ export async function GET() {
   }
 }
 
-// ─── POST: Create a new pricing params version ──────────────────────────────
+// ─── POST: Create a new pricing params version (admin token) ───────────────
 
 interface CreateBody {
   version: string
@@ -47,6 +48,9 @@ interface CreateBody {
 }
 
 export async function POST(request: Request) {
+  const rejected = rejectUnlessBearer(request, process.env.PRICING_ADMIN_TOKEN, "Admin API")
+  if (rejected) return rejected
+
   try {
     const body = (await request.json()) as CreateBody
 
@@ -96,9 +100,12 @@ export async function POST(request: Request) {
   }
 }
 
-// ─── PUT: Activate an existing version ──────────────────────────────────────
+// ─── PUT: Activate an existing version (admin token) ────────────────────────
 
 export async function PUT(request: Request) {
+  const rejected = rejectUnlessBearer(request, process.env.PRICING_ADMIN_TOKEN, "Admin API")
+  if (rejected) return rejected
+
   try {
     const body = (await request.json()) as { version: string }
 
