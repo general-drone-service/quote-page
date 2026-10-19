@@ -19,6 +19,10 @@ export function LineQuoteCta({ pricing, timeResult, formData, areaEstimate, buil
   const [lineSending, setLineSending] = useState(false)
   const [lineSent, setLineSent] = useState(false)
   const [lineError, setLineError] = useState<string | null>(null)
+  // The server may hand out a different code when this one is taken; remember it per quote
+  // so "重新發送" reopens LINE with the saved quote instead of saving a duplicate
+  const [saved, setSaved] = useState<{ for: string; code: string } | null>(null)
+  const savedCode = saved?.for === pricing.quote_code ? saved.code : null
 
   const handleGetQuoteViaLine = useCallback(async () => {
     if (!pricing || !timeResult) return
@@ -29,17 +33,11 @@ export function LineQuoteCta({ pricing, timeResult, formData, areaEstimate, buil
       const numBuildings = formData.numBuildings ?? 1
       const totalArea = areaEstimate.project_total_m2 ?? (areaEstimate.total_area_m2 * numBuildings)
 
-      // Save locally first
-      saveQuote({
-        quote_code:    pricing.quote_code,
-        client_name:   formData.clientName,
-        address:       formData.address,
-        building_name: buildingName || undefined,
-        floors:        formData.floors,
-        total_area_m2: totalArea,
-        total_ntd:     pricing.final_price,
-        suggested_days: timeResult.suggested_days,
-      })
+      if (savedCode) {
+        window.location.href = buildLineOaMessageUrl(`我要報價單 ${savedCode}`)
+        setLineSent(true)
+        return
+      }
 
       // Ad attribution (first-touch cookie, survives the 3-step wizard)
       const ad = readAdFirstTouch()
@@ -82,6 +80,19 @@ export function LineQuoteCta({ pricing, timeResult, formData, areaEstimate, buil
       }
 
       const { quoteCode } = (await res.json()) as { quoteCode: string }
+      setSaved({ for: pricing.quote_code, code: quoteCode })
+
+      // Save locally with the code the server actually stored
+      saveQuote({
+        quote_code:    quoteCode,
+        client_name:   formData.clientName,
+        address:       formData.address,
+        building_name: buildingName || undefined,
+        floors:        formData.floors,
+        total_area_m2: totalArea,
+        total_ntd:     pricing.final_price,
+        suggested_days: timeResult.suggested_days,
+      })
 
       // Navigate to LINE deep link (window.location.href works reliably on
       // mobile; window.open is blocked after async calls lose user-gesture context)
@@ -93,7 +104,7 @@ export function LineQuoteCta({ pricing, timeResult, formData, areaEstimate, buil
     } finally {
       setLineSending(false)
     }
-  }, [pricing, timeResult, formData, areaEstimate, buildingName])
+  }, [pricing, timeResult, formData, areaEstimate, buildingName, savedCode])
 
   return (
     <div className="no-print border-2 border-[#06C755] rounded-xl overflow-hidden">
@@ -115,7 +126,7 @@ export function LineQuoteCta({ pricing, timeResult, formData, areaEstimate, buil
             請在 LINE 中送出訊息，即可立即收到報價單 PDF。
           </p>
           <p className="text-xs text-zinc-500 mt-2">
-            報價編號：<span className="font-mono font-medium">{pricing.quote_code}</span>
+            報價編號：<span className="font-mono font-medium">{savedCode ?? pricing.quote_code}</span>
           </p>
           <button
             onClick={() => setLineSent(false)}

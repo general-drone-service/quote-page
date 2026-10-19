@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabase/client"
 import { extractQuoteCode, normalizeQuoteCode } from "@/lib/quote/lookup"
 import { getQuoteAppOrigin } from "@/lib/quote/public-url"
+import { rejectUnlessBearer } from "@/lib/bearer-auth"
 
 export const runtime = "nodejs"
 
@@ -10,7 +11,11 @@ type LookupPayload = {
   message?: string
 }
 
+/** Server-to-server only (no caller today): requires `Authorization: Bearer $QUOTE_LOOKUP_TOKEN`. */
 export async function POST(request: Request) {
+  const rejected = rejectUnlessBearer(request, process.env.QUOTE_LOOKUP_TOKEN, "Quote lookup API")
+  if (rejected) return rejected
+
   try {
     const body = (await request.json().catch(() => ({}))) as LookupPayload
 
